@@ -3,7 +3,9 @@ import { sql } from 'drizzle-orm'
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 
 import type { Db } from '../db/client'
+import { findProjectBySlug, toProject } from '../db/queries'
 import { projects } from '../db/schema'
+import type { EventBus } from '../events/bus'
 
 const KEY_PATTERN = /^[A-Z][A-Z0-9]{1,9}$/
 
@@ -32,10 +34,6 @@ export const ErrorSchema = z.object({ error: z.string() }).openapi('Error')
 const SlugParamSchema = z.object({
   slug: z.string().openapi({ param: { name: 'slug', in: 'path' }, example: 'demo' }),
 })
-
-type ProjectRow = typeof projects.$inferSelect
-
-const toProject = (row: ProjectRow) => ({ ...row, slug: row.key.toLowerCase() })
 
 const jsonBody = <T extends z.ZodType>(schema: T, description: string) => ({
   content: { 'application/json': { schema } },
@@ -102,14 +100,7 @@ const deleteProjectRoute = createRoute({
   },
 })
 
-export function projectsRouter(db: Db) {
-  const findBySlug = (slug: string) =>
-    db
-      .select()
-      .from(projects)
-      .where(sql`lower(${projects.key}) = ${slug}`)
-      .get()
-
+export function projectsRouter(db: Db, bus: EventBus) {
   return new OpenAPIHono({
     // Validation failures surface as 400 + a useful message (trust boundary).
     defaultHook: (result, c) => {
@@ -126,14 +117,16 @@ export function projectsRouter(db: Db) {
       const { key, name } = c.req.valid('json')
       // Sync driver, single process: check-then-insert cannot interleave; the
       // ci-unique index on lower(key) is the storage-layer backstop.
-      if (findBySlug(key.toLowerCase())) {
+      if (findProjectBySlug(db, key.toLowerCase())) {
         return c.json({ error: `A project with key "${key}" already exists` }, 409)
       }
       const row = db.insert(projects).values({ key, name }).returning().get()
-      return c.json(toProject(row), 201)
+      const project = toProject(row)
+      bus.publishProjectChanged(project)
+      return c.json(project, 201)
     })
     .openapi(getProjectRoute, (c) => {
-      const row = findBySlug(c.req.valid('param').slug)
+      const row = findProjectBySlug(db, c.req.valid('param').slug)
       if (!row) {
         return c.json({ error: 'Project not found' }, 404)
       }
@@ -151,20 +144,24 @@ export function projectsRouter(db: Db) {
       if (!row) {
         return c.json({ error: 'Project not found' }, 404)
       }
-      return c.json(toProject(row), 200)
+      const project = toProject(row)
+      bus.publishProjectChanged(project)
+      return c.json(project, 200)
     })
     .openapi(deleteProjectRoute, (c) => {
       const { slug } = c.req.valid('param')
       // Project-owned data (issues, comments, labels, boards, edges) cascades
       // via ON DELETE CASCADE foreign keys as those tables land; actors are
-      // instance-level and survive (#18).
-      const result = db
+      // instance-level and survive (#18). returning() gives the id to emit.
+      const deleted = db
         .delete(projects)
         .where(sql`lower(${projects.key}) = ${slug}`)
-        .run()
-      if (result.changes === 0) {
+        .returning()
+        .get()
+      if (!deleted) {
         return c.json({ error: 'Project not found' }, 404)
       }
+      bus.publishProjectDeleted(deleted.id)
       return c.body(null, 204)
     })
 }

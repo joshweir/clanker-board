@@ -6,7 +6,10 @@ import { createClient } from './api'
 import { createAppRouter } from './router'
 import './styles.css'
 
-const router = createAppRouter(createClient())
+// Same-origin relative URLs in dev and prod (#17); SSE streams go through the
+// same global fetch as the hc client.
+const fetchImpl: typeof fetch = async (input, init) => fetch(input, init)
+const router = createAppRouter(createClient(fetchImpl), fetchImpl)
 
 const rootEl = document.getElementById('root')
 if (!rootEl) {

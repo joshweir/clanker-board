@@ -14,7 +14,8 @@
     "@tanstack/react-router": "^1.170.18",
     "hono": "^4.12.30",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",

@@ -13,11 +13,12 @@ import { createAppRouter } from '../router'
 // before mount so the root loader sees pre-existing projects.
 export async function renderApp(seed?: (client: ApiClient) => Promise<void>) {
   const app = createApp(createDb(':memory:'))
-  const client = createClient(async (input, init) => app.request(input, init))
+  const fetchImpl: typeof fetch = async (input, init) => app.request(input, init)
+  const client = createClient(fetchImpl)
   if (seed) {
     await seed(client)
   }
-  const router = createAppRouter(client)
+  const router = createAppRouter(client, fetchImpl)
   const user = userEvent.setup()
   render(<RouterProvider router={router} />)
   return { app, client, router, user }
