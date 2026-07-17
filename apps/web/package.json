@@ -5,7 +5,25 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
-    "dev": "tsc --noEmit --watch",
+    "build:app": "vite build",
+    "dev": "vite",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@clanker/api": "workspace:*",
+    "@tanstack/react-router": "^1.170.18",
+    "hono": "^4.12.30",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "vite": "^8.1.5"
   }
 }

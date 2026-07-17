@@ -1,0 +1,132 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.projects,
+.project-detail {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.projects-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 1rem;
+  opacity: 0.9;
+}
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.project-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  border-radius: 0.5rem;
+}
+
+.project-row a {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  text-decoration: none;
+  color: inherit;
+}
+
+.project-key {
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+}
+
+.project-name {
+  opacity: 0.85;
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: Canvas;
+  color: CanvasText;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.danger {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
+.modal {
+  background: Canvas;
+  color: CanvasText;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  width: min(28rem, 100%);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.modal::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal h2 {
+  margin-top: 0;
+}
+
+.modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+}
+
+.modal input {
+  font: inherit;
+  padding: 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+  background: Canvas;
+  color: CanvasText;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.error {
+  color: #c0392b;
+}
