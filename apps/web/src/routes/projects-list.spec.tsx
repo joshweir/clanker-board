@@ -101,6 +101,43 @@ describe('delete project', () => {
   })
 })
 
+describe('live updates', () => {
+  // "Elsewhere" = a mutation through the API by an agent or another tab; the same
+  // in-process app backs both, so the open root page must converge over SSE with
+  // no reload (#27).
+  test('a project created elsewhere appears with no reload', async () => {
+    const { client } = await renderApp()
+    expect(await screen.findByRole('button', { name: 'Create your first project' })).toBeDefined()
+
+    await client.api.projects.$post({ json: { name: 'Remote', key: 'REMOTE' } })
+
+    const row = await screen.findByRole('link', { name: /REMOTE/ })
+    expect(within(row).getByText('Remote')).toBeDefined()
+  })
+
+  test('a rename performed elsewhere updates the list live', async () => {
+    const { client } = await renderApp(seedProject('Old', 'PROJ'))
+    await screen.findByText('Old')
+
+    await client.api.projects[':slug'].$patch({
+      param: { slug: 'proj' },
+      json: { name: 'New Name' },
+    })
+
+    expect(await screen.findByText('New Name')).toBeDefined()
+    expect(screen.queryByText('Old')).toBeNull()
+  })
+
+  test('a delete performed elsewhere removes the project live', async () => {
+    const { client } = await renderApp(seedProject('Doomed', 'DOOM'))
+    await screen.findByRole('link', { name: /DOOM/ })
+
+    await client.api.projects[':slug'].$delete({ param: { slug: 'doom' } })
+
+    expect(await screen.findByRole('button', { name: 'Create your first project' })).toBeDefined()
+  })
+})
+
 describe('navigation', () => {
   test('a project links to its detail page', async () => {
     const { user } = await renderApp(seedProject('Demo', 'DEMO'))

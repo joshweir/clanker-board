@@ -1,24 +1,43 @@
-import { getRouteApi, Link, useRouter } from '@tanstack/react-router'
-import { useState } from 'react'
+import { getRouteApi, Link } from '@tanstack/react-router'
+import { useEffect, useState } from 'react'
 
 import { CreateProjectModal } from '../components/create-project-modal'
 import { DeleteProjectModal } from '../components/delete-project-modal'
+import { subscribeToInstanceEvents } from '../events'
 import type { Project } from '../api'
 
 const route = getRouteApi('/')
 
 type ActiveModal = { kind: 'create' } | { kind: 'delete'; project: Project } | null
 
+// Coarse-snapshot convergence: upsert by id (idempotent), keeping the server's
+// key order so a project created anywhere lands in the right place (#27).
+function upsertById(list: Project[], project: Project): Project[] {
+  const next = list.some((p) => p.id === project.id)
+    ? list.map((p) => (p.id === project.id ? project : p))
+    : [...list, project]
+  return next.sort((a, b) => a.key.localeCompare(b.key))
+}
+
 export function ProjectsList() {
-  const projects = route.useLoaderData()
-  const { client } = route.useRouteContext()
-  const router = useRouter()
+  const initialProjects = route.useLoaderData()
+  const { client, fetchImpl } = route.useRouteContext()
+  const [projects, setProjects] = useState<Project[]>(initialProjects)
   const [modal, setModal] = useState<ActiveModal>(null)
 
-  const closeAndRefresh = () => {
-    setModal(null)
-    void router.invalidate()
-  }
+  // The loader seeds the initial list; the instance SSE stream keeps it live so
+  // a create/rename/delete anywhere (agent or another tab) updates with no reload.
+  // Local create/delete flows through the same stream, so the modals just close.
+  useEffect(
+    () =>
+      subscribeToInstanceEvents(fetchImpl, {
+        onChanged: (project) => setProjects((prev) => upsertById(prev, project)),
+        onDeleted: (id) => setProjects((prev) => prev.filter((p) => p.id !== id)),
+      }),
+    [fetchImpl],
+  )
+
+  const closeModal = () => setModal(null)
 
   return (
     <main className="projects">
@@ -59,18 +78,14 @@ export function ProjectsList() {
       )}
 
       {modal?.kind === 'create' ? (
-        <CreateProjectModal
-          client={client}
-          onClose={() => setModal(null)}
-          onCreated={closeAndRefresh}
-        />
+        <CreateProjectModal client={client} onClose={closeModal} onCreated={closeModal} />
       ) : null}
       {modal?.kind === 'delete' ? (
         <DeleteProjectModal
           client={client}
           project={modal.project}
-          onClose={() => setModal(null)}
-          onDeleted={closeAndRefresh}
+          onClose={closeModal}
+          onDeleted={closeModal}
         />
       ) : null}
     </main>
