@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "import"],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.turbo/**",
+    "**/coverage/**"
+  ],
+  "rules": {
+    "no-duplicate-imports": "error",
+    "prefer-promise-reject-errors": "error",
+    "no-throw-literal": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-floating-promises": "off",
+    "typescript/no-misused-promises": "off",
+    "typescript/promise-function-async": "off",
+    "typescript/triple-slash-reference": "off",
+    "typescript/no-unused-vars": "off",
+    "no-unused-vars": "off",
+    "prefer-const": "off"
+  }
+}

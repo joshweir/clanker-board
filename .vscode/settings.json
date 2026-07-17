@@ -1,0 +1,7 @@
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "oxc.enable": true,
+  "oxc.lint.run": "onType",
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

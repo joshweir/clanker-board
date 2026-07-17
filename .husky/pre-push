@@ -1,0 +1,8 @@
+#!/bin/bash
+# Full gate before push: lint + build (typecheck, incl. spec files) + tests +
+# dependency audit, run in parallel by check-all.
+#
+# check-all self-skips when this exact working tree + install already passed
+# (see the stamp logic in scripts/check-all.sh), so no bypass logic is
+# duplicated here.
+pnpm check-all
