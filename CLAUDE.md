@@ -52,6 +52,12 @@ clanker-board/
 └── packages/      # shared workspace packages (add as needed)
 ```
 
+## Wayfinder
+
+Planning happens via the **wayfinder** skill. Maps and tickets are GitHub Issues.
+Before any wayfinder work, read `.wayfinder/tracker.md` - it is the "Wayfinding
+operations" doc (label scheme, sub-issue/blocking commands, frontier query).
+
 ## Development Rules
 
 - Use pnpm (not npm)
