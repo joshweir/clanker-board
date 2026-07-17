@@ -8,3 +8,6 @@ dist/
 !.env.example
 coverage/
 *.tsbuildinfo
+
+# local SQLite data (apps/api)
+apps/api/data/

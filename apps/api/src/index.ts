@@ -1,2 +1,4 @@
-// Placeholder. apps/api is scaffolded in #9 (Hono + @hono/zod-openapi).
-export const name = '@clanker/api'
+export { createApp } from './app'
+export type { AppType } from './app'
+export { createDb } from './db/client'
+export type { Db } from './db/client'

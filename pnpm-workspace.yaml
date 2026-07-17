@@ -1,3 +1,9 @@
 packages:
   - apps/*
   - packages/*
+allowBuilds:
+  better-sqlite3: true
+overrides:
+  # GHSA-67mh-4wv8-2f99: drizzle-kit's bundled @esbuild-kit loader pins a
+  # vulnerable esbuild; force the patched line (dev-only CLI path).
+  'esbuild@<=0.24.2': '>=0.25.0'
