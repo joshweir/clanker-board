@@ -19,6 +19,13 @@ import { ProjectsList } from './routes/projects-list';
 const boardSearchSchema = z.object({
   ...filterFields,
   hideDone: z.boolean().optional().catch(undefined),
+  // Which detail modal is open (#36), in the URL so it survives a refresh/share:
+  // an issue number opens that card in edit mode; 'new' opens create mode. Absent =
+  // closed. An unknown/deleted number renders nothing (the modal stays closed).
+  issue: z
+    .union([z.number(), z.literal('new')])
+    .optional()
+    .catch(undefined),
 });
 const issuesSearchSchema = z.object({
   ...filterFields,

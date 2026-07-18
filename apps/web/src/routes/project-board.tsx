@@ -34,10 +34,6 @@ import { typeColors } from '../type-color';
 import { upsertById } from '../upsert';
 import { useLiveIssues } from '../use-live-issues';
 
-// Which issue the detail modal is showing: an existing card by id (kept fresh from
-// the live issues list) or create mode from the header's "New issue" button (#36).
-type ActiveModal = { kind: 'edit'; id: number } | { kind: 'new' } | null;
-
 const route = getRouteApi('/projects/$slug');
 
 // A quick-add creates an issue with this type (#28's create requires a non-empty,
@@ -157,7 +153,16 @@ export function ProjectBoard() {
   const navigate = route.useNavigate();
   const [board, setBoard] = useState(initial.board);
   const [toast, setToast] = useState<string | null>(null);
-  const [modal, setModal] = useState<ActiveModal>(null);
+
+  // The open detail modal lives in the URL (?issue=), so a refresh/share reopens it
+  // (#36). Writers preserve the rest of the search (filters/Hide Done); a number opens
+  // that card in edit mode, 'new' opens create mode, undefined closes it.
+  const openIssue = (number: number) =>
+    void navigate({ search: (prev) => ({ ...prev, issue: number }) });
+  const openNewIssue = () =>
+    void navigate({ search: (prev) => ({ ...prev, issue: 'new' }) });
+  const closeModal = () =>
+    void navigate({ search: (prev) => ({ ...prev, issue: undefined }) });
 
   // Ids whose incoming SSE we ignore: the card being dragged (and until its move
   // persists), so a server echo cannot yank it mid-drag or flicker it before the
@@ -222,16 +227,18 @@ export function ProjectBoard() {
   const hideDoneParam = (next: boolean) => (next ? undefined : false);
   const setFilters = (next: Filters) =>
     void navigate({
-      search: () => ({
+      search: (prev) => ({
         ...toSearchValues(next),
         hideDone: hideDoneParam(hideDone),
+        issue: prev.issue,
       }),
     });
   const setHideDone = (next: boolean) =>
     void navigate({
-      search: () => ({
+      search: (prev) => ({
         ...toSearchValues(filters),
         hideDone: hideDoneParam(next),
+        issue: prev.issue,
       }),
     });
 
@@ -533,10 +540,10 @@ export function ProjectBoard() {
                           ? 'board-card dragging'
                           : 'board-card'
                       }
-                      onClick={() => setModal({ kind: 'edit', id: card.id })}
+                      onClick={() => openIssue(card.number)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
-                          setModal({ kind: 'edit', id: card.id });
+                          openIssue(card.number);
                         }
                       }}
                     >
@@ -590,11 +597,7 @@ export function ProjectBoard() {
           labels={labels}
           issues={issues}
         />
-        <button
-          type="button"
-          className="new-issue"
-          onClick={() => setModal({ kind: 'new' })}
-        >
+        <button type="button" className="new-issue" onClick={openNewIssue}>
           New issue
         </button>
       </header>
@@ -662,31 +665,32 @@ export function ProjectBoard() {
           {toast}
         </div>
       )}
-      {modal !== null
-        ? // Edit mode resolves the card from the live issues list so the modal opens
-          // on a current snapshot (and closes itself if the card was deleted); create
-          // mode passes null. labels/issues feed the sidebar pickers (#36).
-          (() => {
-            const editing =
-              modal.kind === 'edit'
-                ? issues.find((i) => i.id === modal.id)
-                : null;
-            if (modal.kind === 'edit' && !editing) {
-              return null;
-            }
-            return (
-              <IssueModal
-                client={client}
-                fetchImpl={fetchImpl}
-                slug={slug}
-                issue={editing ?? null}
-                labels={labels}
-                issues={issues}
-                onClose={() => setModal(null)}
-              />
-            );
-          })()
-        : null}
+      {
+        // The open modal is derived from ?issue= (#36): a number resolves the card from
+        // the live issues list so it opens on a current snapshot (and renders nothing if
+        // the card is unknown/deleted); 'new' opens create mode. labels/issues feed the
+        // sidebar pickers.
+        (() => {
+          const editing =
+            typeof search.issue === 'number'
+              ? (issues.find((i) => i.number === search.issue) ?? null)
+              : null;
+          if (search.issue !== 'new' && !editing) {
+            return null;
+          }
+          return (
+            <IssueModal
+              client={client}
+              fetchImpl={fetchImpl}
+              slug={slug}
+              issue={editing}
+              labels={labels}
+              issues={issues}
+              onClose={closeModal}
+            />
+          );
+        })()
+      }
     </main>
   );
 }
