@@ -154,7 +154,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   padding: 0.1rem 0.4rem;
+  border: 1px solid;
   border-radius: 0.3rem;
+  background: transparent;
   white-space: nowrap;
 }
 

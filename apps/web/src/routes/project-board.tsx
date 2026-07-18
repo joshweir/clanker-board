@@ -548,8 +548,8 @@ export function ProjectBoard() {
                             <span
                               className="board-card-type"
                               style={{
-                                background: color.bg,
-                                color: color.fg,
+                                borderColor: color.bg,
+                                color: color.bg,
                               }}
                             >
                               {card.type}
