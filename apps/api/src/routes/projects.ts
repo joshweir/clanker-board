@@ -6,6 +6,7 @@ import type { Db } from '../db/client'
 import { findProjectBySlug, toProject } from '../db/queries'
 import { projects } from '../db/schema'
 import type { EventBus } from '../events/bus'
+import { jsonBody } from './openapi'
 
 const KEY_PATTERN = /^[A-Z][A-Z0-9]{1,9}$/
 
@@ -33,11 +34,6 @@ export const ErrorSchema = z.object({ error: z.string() }).openapi('Error')
 
 const SlugParamSchema = z.object({
   slug: z.string().openapi({ param: { name: 'slug', in: 'path' }, example: 'demo' }),
-})
-
-const jsonBody = <T extends z.ZodType>(schema: T, description: string) => ({
-  content: { 'application/json': { schema } },
-  description,
 })
 
 const listProjectsRoute = createRoute({
