@@ -30,7 +30,12 @@ pnpm format:check
 ### Test
 
 ```bash
-pnpm test         # turbo run test across all packages
+pnpm test         # turbo run test across all packages (UNIT only)
+
+# E2E (Playwright, real browser vs the running app) - a SEPARATE suite, never run
+# by `pnpm test` / `pnpm check-all`. Specs are *.e2e.spec.ts under apps/web/e2e.
+pnpm exec playwright install chromium   # one-time: fetch the browser binary
+pnpm test:e2e     # build + serve the prod app on a temp db, then run the specs
 ```
 
 ### Dev

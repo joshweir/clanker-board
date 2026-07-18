@@ -11,3 +11,8 @@ coverage/
 
 # local SQLite data (apps/api)
 apps/api/data/
+
+# Playwright E2E artifacts (#41)
+test-results/
+playwright-report/
+blob-report/

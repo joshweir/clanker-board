@@ -13,6 +13,7 @@
     "seed": "pnpm --filter @clanker/api seed",
     "start": "pnpm --filter @clanker/web build:app && NODE_ENV=production pnpm --filter @clanker/api start",
     "test": "turbo run test",
+    "test:e2e": "pnpm --filter @clanker/web test:e2e",
     "lint": "oxlint --type-aware",
     "lint:fix": "oxlint --type-aware --fix",
     "format": "prettier --write .",
