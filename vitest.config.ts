@@ -11,6 +11,6 @@ export default defineConfig({
     // every unit pass so `pnpm test` / `pnpm check-all` stay unit-only, fast, and
     // green - never booting a browser. Keep vitest's own defaults (node_modules, …).
     exclude: [...configDefaults.exclude, '**/*.e2e.spec.ts'],
-    environment: 'node',
-  },
+    environment: 'node'
+  }
 })

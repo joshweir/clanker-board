@@ -1,6 +1,5 @@
 import { z } from '@hono/zod-openapi'
 import { beforeEach, describe, expect, test } from 'vitest'
-
 import { createApp } from '../app'
 import { createDb } from '../db/client'
 import { sanitizeFtsQuery } from '../db/search'
@@ -17,37 +16,57 @@ beforeEach(() => {
 
 const json = (body: unknown) => ({
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(body),
+  body: JSON.stringify(body)
 })
 
 const createProject = async (key: string, name = key) =>
   app.request('/api/projects', { method: 'POST', ...json({ key, name }) })
 
-const createIssue = async (slug: string, title: string, body = '', type = 'bug') =>
-  app.request(`/api/projects/${slug}/issues`, { method: 'POST', ...json({ title, type, body }) })
+const createIssue = async (
+  slug: string,
+  title: string,
+  body = '',
+  type = 'bug'
+) =>
+  app.request(`/api/projects/${slug}/issues`, {
+    method: 'POST',
+    ...json({ title, type, body })
+  })
 
 const createActor = async (name = 'Ada', kind = 'human') =>
   ActorSchema.parse(
-    await (await app.request('/api/actors', { method: 'POST', ...json({ name, kind }) })).json(),
+    await (
+      await app.request('/api/actors', {
+        method: 'POST',
+        ...json({ name, kind })
+      })
+    ).json()
   )
 
-const postComment = async (slug: string, number: number, body: string, actorId: number) =>
+const postComment = async (
+  slug: string,
+  number: number,
+  body: string,
+  actorId: number
+) =>
   app.request(`/api/projects/${slug}/issues/${number}/comments`, {
     method: 'POST',
-    ...json({ actorId, body }),
+    ...json({ actorId, body })
   })
 
 // The response contract the route documents; parsing it here doubles as a schema check.
 const SearchHitSchema = z.object({
-  issue: z.object({ number: z.number(), key: z.string(), title: z.string() }).passthrough(),
+  issue: z
+    .object({ number: z.number(), key: z.string(), title: z.string() })
+    .passthrough(),
   matchedIn: z.enum(['title', 'body', 'comment']),
-  snippet: z.string(),
+  snippet: z.string()
 })
 const SearchResponseSchema = z.object({
   results: z.array(SearchHitSchema),
   total: z.number(),
   offset: z.number(),
-  limit: z.number(),
+  limit: z.number()
 })
 
 const search = async (slug: string, query: string) => {
@@ -82,7 +101,9 @@ describe('GET /api/projects/:slug/search', () => {
   })
 
   test('404s for an unknown project', async () => {
-    expect((await app.request('/api/projects/nope/search?q=x')).status).toBe(404)
+    expect((await app.request('/api/projects/nope/search?q=x')).status).toBe(
+      404
+    )
   })
 
   test('finds an issue by a word in its title', async () => {
@@ -139,7 +160,10 @@ describe('GET /api/projects/:slug/search', () => {
 
   test('a query full of FTS5 operators does not error or inject', async () => {
     await createIssue('demo', 'A normal issue')
-    const { res, body } = await search('demo', `q=${encodeURIComponent('AND OR NOT NEAR() "x" *')}`)
+    const { res, body } = await search(
+      'demo',
+      `q=${encodeURIComponent('AND OR NOT NEAR() "x" *')}`
+    )
     expect(res.status).toBe(200)
     // No matching text, but crucially no 500 / parse error.
     expect(body.total).toBe(0)
@@ -177,27 +201,49 @@ describe('GET /api/projects/:slug/search', () => {
     })
 
     test('state defaults to both, and restricts when given', async () => {
-      await app.request('/api/projects/demo/issues/1', { method: 'PATCH', ...json({ state: 'closed' }) })
+      await app.request('/api/projects/demo/issues/1', {
+        method: 'PATCH',
+        ...json({ state: 'closed' })
+      })
       expect((await search('demo', 'q=searchable')).body.total).toBe(2)
-      expect((await search('demo', 'q=searchable&state=open')).body.total).toBe(1)
-      expect((await search('demo', 'q=searchable&state=closed')).body.total).toBe(1)
+      expect((await search('demo', 'q=searchable&state=open')).body.total).toBe(
+        1
+      )
+      expect(
+        (await search('demo', 'q=searchable&state=closed')).body.total
+      ).toBe(1)
     })
 
     test('label is OR-multi across the given ids', async () => {
       const mk = async (name: string) =>
-        z
-          .object({ id: z.number() })
-          .parse(await (await app.request('/api/projects/demo/labels', { method: 'POST', ...json({ name }) })).json()).id
+        z.object({ id: z.number() }).parse(
+          await (
+            await app.request('/api/projects/demo/labels', {
+              method: 'POST',
+              ...json({ name })
+            })
+          ).json()
+        ).id
       const p0 = await mk('p0')
       const p1 = await mk('p1')
-      await app.request(`/api/projects/demo/issues/1/labels/${p0}`, { method: 'PUT' })
-      await app.request(`/api/projects/demo/issues/2/labels/${p1}`, { method: 'PUT' })
-      expect((await search('demo', `q=searchable&label=${p0}`)).body.total).toBe(1)
-      expect((await search('demo', `q=searchable&label=${p0},${p1}`)).body.total).toBe(2)
+      await app.request(`/api/projects/demo/issues/1/labels/${p0}`, {
+        method: 'PUT'
+      })
+      await app.request(`/api/projects/demo/issues/2/labels/${p1}`, {
+        method: 'PUT'
+      })
+      expect(
+        (await search('demo', `q=searchable&label=${p0}`)).body.total
+      ).toBe(1)
+      expect(
+        (await search('demo', `q=searchable&label=${p0},${p1}`)).body.total
+      ).toBe(2)
     })
 
     test('rejects a non-numeric label id with 400', async () => {
-      expect((await app.request('/api/projects/demo/search?q=x&label=abc')).status).toBe(400)
+      expect(
+        (await app.request('/api/projects/demo/search?q=x&label=abc')).status
+      ).toBe(400)
     })
   })
 
@@ -217,7 +263,10 @@ describe('GET /api/projects/:slug/search', () => {
 
   test('the index stays live: an edited title moves in and out of results', async () => {
     await createIssue('demo', 'temporary name')
-    await app.request('/api/projects/demo/issues/1', { method: 'PATCH', ...json({ title: 'renamed unicorn' }) })
+    await app.request('/api/projects/demo/issues/1', {
+      method: 'PATCH',
+      ...json({ title: 'renamed unicorn' })
+    })
     expect((await search('demo', 'q=unicorn')).body.total).toBe(1)
     expect((await search('demo', 'q=temporary')).body.total).toBe(0)
   })

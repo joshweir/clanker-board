@@ -1,6 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-
 import type { ApiClient } from '../api'
 import { renderApp } from '../test/harness'
 
@@ -13,18 +12,30 @@ const slug = 'demo'
 const param = { slug }
 
 function expectId(body: unknown): number {
-  if (typeof body === 'object' && body !== null && 'id' in body && typeof body.id === 'number') {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'id' in body &&
+    typeof body.id === 'number'
+  ) {
     return body.id
   }
   throw new Error(`expected an entity with an id, got ${JSON.stringify(body)}`)
 }
 
 async function createLabel(client: ApiClient, name: string): Promise<number> {
-  return expectId(await (await client.api.projects[':slug'].labels.$post({ param, json: { name } })).json())
+  return expectId(
+    await (
+      await client.api.projects[':slug'].labels.$post({ param, json: { name } })
+    ).json()
+  )
 }
 
 async function createIssue(client: ApiClient, title: string): Promise<number> {
-  const res = await client.api.projects[':slug'].issues.$post({ param, json: { title, type: 'task' } })
+  const res = await client.api.projects[':slug'].issues.$post({
+    param,
+    json: { title, type: 'task' }
+  })
   const body = await res.json()
   if (!('number' in body)) {
     throw new Error(`expected a created issue, got ${JSON.stringify(body)}`)
@@ -32,20 +43,32 @@ async function createIssue(client: ApiClient, title: string): Promise<number> {
   return body.number
 }
 
-async function attachLabel(client: ApiClient, issueNumber: number, labelId: number): Promise<void> {
+async function attachLabel(
+  client: ApiClient,
+  issueNumber: number,
+  labelId: number
+): Promise<void> {
   await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
-    param: { slug, number: String(issueNumber), labelId: String(labelId) },
+    param: { slug, number: String(issueNumber), labelId: String(labelId) }
   })
 }
 
-async function detachLabel(client: ApiClient, issueNumber: number, labelId: number): Promise<void> {
-  await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$delete({
-    param: { slug, number: String(issueNumber), labelId: String(labelId) },
+async function detachLabel(
+  client: ApiClient,
+  issueNumber: number,
+  labelId: number
+): Promise<void> {
+  await client.api.projects[':slug'].issues[':number'].labels[
+    ':labelId'
+  ].$delete({
+    param: { slug, number: String(issueNumber), labelId: String(labelId) }
   })
 }
 
 async function readIssue(client: ApiClient, number: number) {
-  const res = await client.api.projects[':slug'].issues[':number'].$get({ param: { slug, number: String(number) } })
+  const res = await client.api.projects[':slug'].issues[':number'].$get({
+    param: { slug, number: String(number) }
+  })
   const body = await res.json()
   if (!('labels' in body)) {
     throw new Error(`expected an issue, got ${JSON.stringify(body)}`)
@@ -58,35 +81,59 @@ async function readIssue(client: ApiClient, number: number) {
 // zero, which hides all cross-column drop targets. Supply a deterministic layout -
 // columns tile left to right, cards stack top to bottom - so arrow-key moves resolve.
 beforeEach(() => {
-  Object.defineProperty(document.documentElement, 'clientWidth', { configurable: true, value: 1024 })
-  Object.defineProperty(document.documentElement, 'clientHeight', { configurable: true, value: 768 })
+  Object.defineProperty(document.documentElement, 'clientWidth', {
+    configurable: true,
+    value: 1024
+  })
+  Object.defineProperty(document.documentElement, 'clientHeight', {
+    configurable: true,
+    value: 768
+  })
   const COL_W = 200
   const CARD_H = 60
-  const droppables = () => Array.from(document.querySelectorAll('[data-rfd-droppable-id]'))
-  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element): DOMRect {
-    const el = this as HTMLElement
-    const rect = (left: number, top: number, width: number, height: number): DOMRect => ({
-      x: left,
-      y: top,
-      left,
-      top,
-      width,
-      height,
-      right: left + width,
-      bottom: top + height,
-      toJSON: () => ({}),
-    })
-    if (el.hasAttribute('data-rfd-droppable-id')) {
-      return rect(droppables().indexOf(el) * COL_W, 0, COL_W, 500)
+  const droppables = () =>
+    Array.from(document.querySelectorAll('[data-rfd-droppable-id]'))
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: Element): DOMRect {
+      const el = this as HTMLElement
+      const rect = (
+        left: number,
+        top: number,
+        width: number,
+        height: number
+      ): DOMRect => ({
+        x: left,
+        y: top,
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+        toJSON: () => ({})
+      })
+      if (el.hasAttribute('data-rfd-droppable-id')) {
+        return rect(droppables().indexOf(el) * COL_W, 0, COL_W, 500)
+      }
+      if (
+        el.hasAttribute('data-rfd-draggable-id') ||
+        el.hasAttribute('data-rfd-drag-handle-draggable-id')
+      ) {
+        const column = el.closest('[data-rfd-droppable-id]')
+        const colIndex = column ? droppables().indexOf(column) : 0
+        const siblings = column
+          ? Array.from(column.querySelectorAll('[data-rfd-draggable-id]'))
+          : [el]
+        return rect(
+          colIndex * COL_W,
+          Math.max(0, siblings.indexOf(el)) * CARD_H,
+          COL_W,
+          CARD_H
+        )
+      }
+      return rect(0, 0, 0, 0)
     }
-    if (el.hasAttribute('data-rfd-draggable-id') || el.hasAttribute('data-rfd-drag-handle-draggable-id')) {
-      const column = el.closest('[data-rfd-droppable-id]')
-      const colIndex = column ? droppables().indexOf(column) : 0
-      const siblings = column ? Array.from(column.querySelectorAll('[data-rfd-draggable-id]')) : [el]
-      return rect(colIndex * COL_W, Math.max(0, siblings.indexOf(el)) * CARD_H, COL_W, CARD_H)
-    }
-    return rect(0, 0, 0, 0)
-  })
+  )
 })
 
 afterEach(() => {
@@ -110,16 +157,23 @@ async function openBoard(wrapFetch?: (base: typeof fetch) => typeof fetch) {
   let todo = 0
   let doing = 0
   let number = 0
-  const { client, router } = await renderApp(async (client) => {
+  const { client, router } = await renderApp(async client => {
     await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } })
     todo = await createLabel(client, 'To Do')
     doing = await createLabel(client, 'Doing')
     number = await createIssue(client, 'Wire the board')
     await attachLabel(client, number, todo)
-    await client.api.projects[':slug'].board.$patch({ param, json: { columnAxis: [todo, doing] } })
+    await client.api.projects[':slug'].board.$patch({
+      param,
+      json: { columnAxis: [todo, doing] }
+    })
   }, wrapFetch)
   // Reveal Done (hidden by default, #38) so a card can be dragged into it.
-  await router.navigate({ to: '/projects/$slug', params: { slug }, search: { hideDone: false } })
+  await router.navigate({
+    to: '/projects/$slug',
+    params: { slug },
+    search: { hideDone: false }
+  })
   const handle = await screen.findByRole('button', { name: /Wire the board/i })
   return { client, todo, doing, number, handle }
 }
@@ -137,7 +191,7 @@ describe('board keyboard drag-and-drop', () => {
     // Persisted + reconciled: server now carries Doing (not To Do) and a rank.
     await waitFor(async () => {
       const issue = await readIssue(client, number)
-      const ids = issue.labels.map((l) => l.id)
+      const ids = issue.labels.map(l => l.id)
       expect(ids).toContain(doing)
       expect(ids).not.toContain(todo)
       expect(issue.rank.length).toBeGreaterThan(0)
@@ -156,20 +210,29 @@ describe('board keyboard drag-and-drop', () => {
     await waitFor(async () => {
       const issue = await readIssue(client, number)
       expect(issue.state).toBe('closed')
-      expect(issue.labels.map((l) => l.id)).toContain(todo) // label kept
+      expect(issue.labels.map(l => l.id)).toContain(todo) // label kept
     })
   })
 
   test('reverts and toasts when the server rejects the move', async () => {
     // Fail the label detach that a To Do -> Doing move issues, so nothing persists.
-    const wrapFetch = (base: typeof fetch): typeof fetch => async (input, init) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-      const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
-      if (method === 'DELETE' && /\/issues\/\d+\/labels\/\d+/.test(url)) {
-        return new Response('nope', { status: 500 })
+    const wrapFetch =
+      (base: typeof fetch): typeof fetch =>
+      async (input, init) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url
+        const method = (
+          init?.method ?? (input instanceof Request ? input.method : 'GET')
+        ).toUpperCase()
+        if (method === 'DELETE' && /\/issues\/\d+\/labels\/\d+/.test(url)) {
+          return new Response('nope', { status: 500 })
+        }
+        return base(input, init)
       }
-      return base(input, init)
-    }
     const { client, todo, doing, number, handle } = await openBoard(wrapFetch)
 
     keyboardDrag(handle, ARROW_RIGHT) // To Do -> Doing (optimistic)
@@ -182,8 +245,8 @@ describe('board keyboard drag-and-drop', () => {
 
     // Server was never mutated: the card still carries only To Do.
     const issue = await readIssue(client, number)
-    expect(issue.labels.map((l) => l.id)).toEqual([todo])
-    expect(issue.labels.map((l) => l.id)).not.toContain(doing)
+    expect(issue.labels.map(l => l.id)).toEqual([todo])
+    expect(issue.labels.map(l => l.id)).not.toContain(doing)
   })
 
   test('reconciles an external column move from issue.changed (last-write-wins)', async () => {

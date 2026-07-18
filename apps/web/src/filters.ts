@@ -14,10 +14,13 @@ export const filterFields = {
   type: z.array(z.string()).optional().catch(undefined),
   label: z.array(z.number()).optional().catch(undefined),
   // assignee is single: absent = Any, 'unassigned' = no assignee, a number = that actor.
-  assignee: z.union([z.literal('unassigned'), z.number()]).optional().catch(undefined),
+  assignee: z
+    .union([z.literal('unassigned'), z.number()])
+    .optional()
+    .catch(undefined),
   // blocked / ready are boolean toggles over the issue's derived state (#30).
   blocked: z.boolean().optional().catch(undefined),
-  ready: z.boolean().optional().catch(undefined),
+  ready: z.boolean().optional().catch(undefined)
 }
 
 export const filterSearchSchema = z.object(filterFields)
@@ -36,7 +39,13 @@ export interface Filters {
 // The all-inactive filter set - what Clear-all resets the axes to. Route view
 // controls (board Hide Done, list Open/Closed/All) are NOT axes, so Clear-all leaves
 // them untouched; the routes merge only these axis fields over their own search.
-export const emptyFilters: Filters = { type: [], label: [], assignee: undefined, blocked: false, ready: false }
+export const emptyFilters: Filters = {
+  type: [],
+  label: [],
+  assignee: undefined,
+  blocked: false,
+  ready: false
+}
 
 // Normalize the URL search into the working filter set (absent -> inactive default).
 export function toFilters(search: FilterSearch): Filters {
@@ -45,7 +54,7 @@ export function toFilters(search: FilterSearch): Filters {
     label: search.label ?? [],
     assignee: search.assignee,
     blocked: search.blocked ?? false,
-    ready: search.ready ?? false,
+    ready: search.ready ?? false
   }
 }
 
@@ -58,7 +67,7 @@ export function toSearchValues(filters: Filters): FilterSearch {
     label: filters.label.length > 0 ? filters.label : undefined,
     assignee: filters.assignee,
     blocked: filters.blocked ? true : undefined,
-    ready: filters.ready ? true : undefined,
+    ready: filters.ready ? true : undefined
   }
 }
 
@@ -75,17 +84,26 @@ export interface FilterableIssue {
 // AND across axes, OR within an axis (#38). An inactive axis (empty list / undefined
 // / false) imposes no constraint. blocked+ready together is intentionally an AND, so
 // it yields nothing (an issue is never both) - correct per the axis semantics.
-export function matchesFilters(issue: FilterableIssue, filters: Filters): boolean {
+export function matchesFilters(
+  issue: FilterableIssue,
+  filters: Filters
+): boolean {
   if (filters.type.length > 0 && !filters.type.includes(issue.type)) {
     return false
   }
-  if (filters.label.length > 0 && !issue.labels.some((label) => filters.label.includes(label.id))) {
+  if (
+    filters.label.length > 0 &&
+    !issue.labels.some(label => filters.label.includes(label.id))
+  ) {
     return false
   }
   if (filters.assignee === 'unassigned' && issue.assigneeId !== null) {
     return false
   }
-  if (typeof filters.assignee === 'number' && issue.assigneeId !== filters.assignee) {
+  if (
+    typeof filters.assignee === 'number' &&
+    issue.assigneeId !== filters.assignee
+  ) {
     return false
   }
   if (filters.blocked && !issue.blocked) {

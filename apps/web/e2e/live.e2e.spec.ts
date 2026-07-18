@@ -1,4 +1,9 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Page
+} from '@playwright/test'
 import { z } from 'zod'
 
 // Browser proof-of-life (#41): drive the REAL app in Chromium and mutate it out of
@@ -6,7 +11,12 @@ import { z } from 'zod'
 // with NO reload - the cross-process guarantee the unit suite (in-process fetch)
 // cannot exercise. API responses are zod-parsed at this boundary (no casts, no any),
 // exactly as the app validates its own SSE frames (project-events.ts).
-const projectSchema = z.object({ id: z.number(), key: z.string(), name: z.string(), slug: z.string() })
+const projectSchema = z.object({
+  id: z.number(),
+  key: z.string(),
+  name: z.string(),
+  slug: z.string()
+})
 const labelSchema = z.object({ id: z.number(), name: z.string() })
 const issueSchema = z.object({ number: z.number(), title: z.string() })
 
@@ -18,8 +28,13 @@ function uniqueKey(): string {
   return `E${Date.now().toString(36).toUpperCase().slice(-6)}${seq}`
 }
 
-async function createProject(request: APIRequestContext, name: string): Promise<z.infer<typeof projectSchema>> {
-  const res = await request.post('/api/projects', { data: { key: uniqueKey(), name } })
+async function createProject(
+  request: APIRequestContext,
+  name: string
+): Promise<z.infer<typeof projectSchema>> {
+  const res = await request.post('/api/projects', {
+    data: { key: uniqueKey(), name }
+  })
   expect(res.status(), await res.text()).toBe(201)
   return projectSchema.parse(await res.json())
 }
@@ -27,24 +42,34 @@ async function createProject(request: APIRequestContext, name: string): Promise<
 async function createLabel(
   request: APIRequestContext,
   slug: string,
-  name: string,
+  name: string
 ): Promise<z.infer<typeof labelSchema>> {
-  const res = await request.post(`/api/projects/${slug}/labels`, { data: { name } })
+  const res = await request.post(`/api/projects/${slug}/labels`, {
+    data: { name }
+  })
   expect(res.status(), await res.text()).toBe(201)
   return labelSchema.parse(await res.json())
 }
 
-async function setBoardAxis(request: APIRequestContext, slug: string, columnAxis: number[]): Promise<void> {
-  const res = await request.patch(`/api/projects/${slug}/board`, { data: { columnAxis } })
+async function setBoardAxis(
+  request: APIRequestContext,
+  slug: string,
+  columnAxis: number[]
+): Promise<void> {
+  const res = await request.patch(`/api/projects/${slug}/board`, {
+    data: { columnAxis }
+  })
   expect(res.status(), await res.text()).toBe(200)
 }
 
 async function createIssue(
   request: APIRequestContext,
   slug: string,
-  title: string,
+  title: string
 ): Promise<z.infer<typeof issueSchema>> {
-  const res = await request.post(`/api/projects/${slug}/issues`, { data: { title, type: 'task' } })
+  const res = await request.post(`/api/projects/${slug}/issues`, {
+    data: { title, type: 'task' }
+  })
   expect(res.status(), await res.text()).toBe(201)
   return issueSchema.parse(await res.json())
 }
@@ -55,7 +80,10 @@ async function columnTitles(page: Page): Promise<string[]> {
   return page.locator('.board-column-header h2').allTextContents()
 }
 
-test('an API-created issue appears on an open board with no reload', async ({ page, request }) => {
+test('an API-created issue appears on an open board with no reload', async ({
+  page,
+  request
+}) => {
   const project = await createProject(request, 'Proof of life')
   const backlog = await createLabel(request, project.slug, 'Backlog')
   await setBoardAxis(request, project.slug, [backlog.id])
@@ -71,7 +99,10 @@ test('an API-created issue appears on an open board with no reload', async ({ pa
   await expect(page.getByText(title)).toBeVisible()
 })
 
-test('a live board.changed (column reorder) re-lays-out the open board', async ({ page, request }) => {
+test('a live board.changed (column reorder) re-lays-out the open board', async ({
+  page,
+  request
+}) => {
   const project = await createProject(request, 'Live reorder')
   const backlog = await createLabel(request, project.slug, 'Backlog')
   const review = await createLabel(request, project.slug, 'Review')
@@ -95,7 +126,10 @@ test('a live board.changed (column reorder) re-lays-out the open board', async (
     .toBe(true)
 })
 
-test('the instance project list updates live when a project is created', async ({ page, request }) => {
+test('the instance project list updates live when a project is created', async ({
+  page,
+  request
+}) => {
   await page.goto('/')
   // List mounted (and its instance SSE stream subscribed) before we create.
   await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible()

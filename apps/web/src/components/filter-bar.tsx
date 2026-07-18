@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-
-import { emptyFilters, isFilterActive, type Filters } from '../filters'
 import type { Actor, Label } from '../api'
+import { emptyFilters, isFilterActive, type Filters } from '../filters'
 
 // One consistent filter bar for both the Board and Issues tabs (#38): type (multi,
 // OR), label (multi, OR), assignee (Any / Unassigned / actor), and blocked / ready
@@ -21,15 +20,30 @@ interface FilterBarProps {
 }
 
 function toggle<T>(list: T[], value: T): T[] {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
+  return list.includes(value)
+    ? list.filter(item => item !== value)
+    : [...list, value]
 }
 
-export function FilterBar({ filters, types, labels, actors, onChange, children }: FilterBarProps) {
+export function FilterBar({
+  filters,
+  types,
+  labels,
+  actors,
+  onChange,
+  children
+}: FilterBarProps) {
   // The assignee axis is single-valued; encode Any as 'any' and the actor id as a
   // string for the native <select>, decoding back to the URL shape on change.
-  const assigneeValue = filters.assignee === undefined ? 'any' : String(filters.assignee)
+  const assigneeValue =
+    filters.assignee === undefined ? 'any' : String(filters.assignee)
   const onAssignee = (raw: string) => {
-    const assignee = raw === 'any' ? undefined : raw === 'unassigned' ? 'unassigned' : Number(raw)
+    const assignee =
+      raw === 'any'
+        ? undefined
+        : raw === 'unassigned'
+          ? 'unassigned'
+          : Number(raw)
     onChange({ ...filters, assignee })
   }
 
@@ -39,12 +53,14 @@ export function FilterBar({ filters, types, labels, actors, onChange, children }
     <fieldset className="filter-bar" aria-label="Filters">
       <fieldset className="filter-group">
         <legend>Type</legend>
-        {types.map((type) => (
+        {types.map(type => (
           <label key={type} className="filter-option">
             <input
               type="checkbox"
               checked={filters.type.includes(type)}
-              onChange={() => onChange({ ...filters, type: toggle(filters.type, type) })}
+              onChange={() =>
+                onChange({ ...filters, type: toggle(filters.type, type) })
+              }
             />
             {type}
           </label>
@@ -53,12 +69,14 @@ export function FilterBar({ filters, types, labels, actors, onChange, children }
 
       <fieldset className="filter-group">
         <legend>Label</legend>
-        {labels.map((label) => (
+        {labels.map(label => (
           <label key={label.id} className="filter-option">
             <input
               type="checkbox"
               checked={filters.label.includes(label.id)}
-              onChange={() => onChange({ ...filters, label: toggle(filters.label, label.id) })}
+              onChange={() =>
+                onChange({ ...filters, label: toggle(filters.label, label.id) })
+              }
             />
             {label.name}
           </label>
@@ -67,10 +85,13 @@ export function FilterBar({ filters, types, labels, actors, onChange, children }
 
       <label className="filter-group filter-assignee">
         <span>Assignee</span>
-        <select value={assigneeValue} onChange={(event) => onAssignee(event.target.value)}>
+        <select
+          value={assigneeValue}
+          onChange={event => onAssignee(event.target.value)}
+        >
           <option value="any">Any</option>
           <option value="unassigned">Unassigned</option>
-          {actors.map((actor) => (
+          {actors.map(actor => (
             <option key={actor.id} value={String(actor.id)}>
               {actor.name}
             </option>
@@ -98,7 +119,11 @@ export function FilterBar({ filters, types, labels, actors, onChange, children }
       {children}
 
       {isFilterActive(filters) ? (
-        <button type="button" className="filter-clear" onClick={() => onChange(emptyFilters)}>
+        <button
+          type="button"
+          className="filter-clear"
+          onClick={() => onChange(emptyFilters)}
+        >
           Clear all
         </button>
       ) : null}

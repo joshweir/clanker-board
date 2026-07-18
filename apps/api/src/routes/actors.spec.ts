@@ -1,6 +1,5 @@
 import { z } from '@hono/zod-openapi'
 import { beforeEach, describe, expect, test } from 'vitest'
-
 import { createApp } from '../app'
 import { createDb } from '../db/client'
 import { ActorSchema } from './actors'
@@ -17,18 +16,18 @@ const createActor = async (body: unknown) =>
   app.request('/api/actors', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   })
 
 const createProject = async (body: unknown) =>
   app.request('/api/projects', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   })
 
 describe('POST /api/actors', () => {
-  test.each([['human'], ['agent']])('creates a %s actor', async (kind) => {
+  test.each([['human'], ['agent']])('creates a %s actor', async kind => {
     const res = await createActor({ name: 'Ada', kind })
     expect(res.status).toBe(201)
     const actor = ActorSchema.parse(await res.json())
@@ -53,29 +52,37 @@ describe('GET /api/actors', () => {
     expect(await (await app.request('/api/actors')).json()).toEqual([])
     await createActor({ name: 'Ada', kind: 'human' })
     await createActor({ name: 'Bot', kind: 'agent' })
-    const actors = z.array(ActorSchema).parse(await (await app.request('/api/actors')).json())
-    expect(actors.map((a) => a.name)).toEqual(['Ada', 'Bot'])
+    const actors = z
+      .array(ActorSchema)
+      .parse(await (await app.request('/api/actors')).json())
+    expect(actors.map(a => a.name)).toEqual(['Ada', 'Bot'])
   })
 })
 
 describe('actors survive project deletion (#18)', () => {
   test('deleting a project leaves its assignee actors intact', async () => {
     await createProject({ name: 'Demo', key: 'DEMO' })
-    const actor = ActorSchema.parse(await (await createActor({ name: 'Ada', kind: 'human' })).json())
+    const actor = ActorSchema.parse(
+      await (await createActor({ name: 'Ada', kind: 'human' })).json()
+    )
     await app.request('/api/projects/demo/issues', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Task', type: 'chore' }),
+      body: JSON.stringify({ title: 'Task', type: 'chore' })
     })
     await app.request('/api/projects/demo/issues/1', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ assigneeId: actor.id }),
+      body: JSON.stringify({ assigneeId: actor.id })
     })
 
-    expect((await app.request('/api/projects/demo', { method: 'DELETE' })).status).toBe(204)
+    expect(
+      (await app.request('/api/projects/demo', { method: 'DELETE' })).status
+    ).toBe(204)
 
-    const actors = z.array(ActorSchema).parse(await (await app.request('/api/actors')).json())
-    expect(actors.map((a) => a.id)).toContain(actor.id)
+    const actors = z
+      .array(ActorSchema)
+      .parse(await (await app.request('/api/actors')).json())
+    expect(actors.map(a => a.id)).toContain(actor.id)
   })
 })

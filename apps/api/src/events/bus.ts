@@ -3,7 +3,7 @@ import type {
   CommentSnapshot,
   IssueSnapshot,
   LabelSnapshot,
-  ProjectSnapshot,
+  ProjectSnapshot
 } from '../db/queries'
 
 // Coarse entity-snapshot events (#6/#18): the client upserts by id, so redelivery
@@ -80,20 +80,29 @@ export function createEventBus() {
       projectChannel(projectId).publish({ event: 'issue.changed', data: issue })
     },
     publishIssueDeleted(projectId: number, id: number, number: number): void {
-      projectChannel(projectId).publish({ event: 'issue.deleted', data: { id, number } })
+      projectChannel(projectId).publish({
+        event: 'issue.deleted',
+        data: { id, number }
+      })
     },
     publishLabelChanged(projectId: number, label: LabelSnapshot): void {
       projectChannel(projectId).publish({ event: 'label.changed', data: label })
     },
     publishLabelDeleted(projectId: number, id: number): void {
-      projectChannel(projectId).publish({ event: 'label.deleted', data: { id } })
+      projectChannel(projectId).publish({
+        event: 'label.deleted',
+        data: { id }
+      })
     },
     publishCommentCreated(projectId: number, comment: CommentSnapshot): void {
-      projectChannel(projectId).publish({ event: 'comment.created', data: comment })
+      projectChannel(projectId).publish({
+        event: 'comment.created',
+        data: comment
+      })
     },
     publishBoardChanged(projectId: number, board: BoardSnapshot): void {
       projectChannel(projectId).publish({ event: 'board.changed', data: board })
-    },
+    }
   }
 }
 

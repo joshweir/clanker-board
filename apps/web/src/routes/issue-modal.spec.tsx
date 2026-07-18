@@ -1,6 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
-
 import type { ApiClient } from '../api'
 import { renderApp } from '../test/harness'
 
@@ -12,18 +11,30 @@ const slug = 'demo'
 const param = { slug }
 
 function expectId(body: unknown): number {
-  if (typeof body === 'object' && body !== null && 'id' in body && typeof body.id === 'number') {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'id' in body &&
+    typeof body.id === 'number'
+  ) {
     return body.id
   }
   throw new Error(`expected an entity with an id, got ${JSON.stringify(body)}`)
 }
 
 async function createLabel(client: ApiClient, name: string): Promise<number> {
-  return expectId(await (await client.api.projects[':slug'].labels.$post({ param, json: { name } })).json())
+  return expectId(
+    await (
+      await client.api.projects[':slug'].labels.$post({ param, json: { name } })
+    ).json()
+  )
 }
 
 async function createIssue(client: ApiClient, title: string): Promise<number> {
-  const res = await client.api.projects[':slug'].issues.$post({ param, json: { title, type: 'task' } })
+  const res = await client.api.projects[':slug'].issues.$post({
+    param,
+    json: { title, type: 'task' }
+  })
   const body = await res.json()
   if (!('number' in body)) {
     throw new Error(`expected a created issue, got ${JSON.stringify(body)}`)
@@ -33,7 +44,7 @@ async function createIssue(client: ApiClient, title: string): Promise<number> {
 
 async function readIssue(client: ApiClient, number: number) {
   const res = await client.api.projects[':slug'].issues[':number'].$get({
-    param: { slug, number: String(number) },
+    param: { slug, number: String(number) }
   })
   const body = await res.json()
   if (!('title' in body)) {
@@ -45,14 +56,19 @@ async function readIssue(client: ApiClient, number: number) {
 // Seed a project with one placed card, mount the board, and open the card's modal.
 async function openCardModal() {
   let number = 0
-  const { client, router, user } = await renderApp(async (client) => {
+  const { client, router, user } = await renderApp(async client => {
     await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } })
     const todo = await createLabel(client, 'To Do')
     number = await createIssue(client, 'Wire the board')
-    await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
-      param: { slug, number: String(number), labelId: String(todo) },
+    await client.api.projects[':slug'].issues[':number'].labels[
+      ':labelId'
+    ].$put({
+      param: { slug, number: String(number), labelId: String(todo) }
     })
-    await client.api.projects[':slug'].board.$patch({ param, json: { columnAxis: [todo] } })
+    await client.api.projects[':slug'].board.$patch({
+      param,
+      json: { columnAxis: [todo] }
+    })
   })
   await router.navigate({ to: '/projects/$slug', params: { slug } })
   await user.click(await screen.findByText('Wire the board'))
@@ -86,7 +102,7 @@ describe('issue modal', () => {
     // A remote change lands for both the dirty title and the untouched body.
     await client.api.projects[':slug'].issues[':number'].$patch({
       param: { slug, number: String(number) },
-      json: { title: 'Remote title', body: 'Remote body' },
+      json: { title: 'Remote title', body: 'Remote body' }
     })
 
     // The dirty title keeps the user's text and surfaces the "changed remotely" hint.
@@ -94,7 +110,9 @@ describe('issue modal', () => {
     expect(title.value).toBe('My local edit')
     // The non-dirty body upserts live from the same event.
     await waitFor(() => {
-      expect(screen.getByLabelText<HTMLTextAreaElement>('Body').value).toBe('Remote body')
+      expect(screen.getByLabelText<HTMLTextAreaElement>('Body').value).toBe(
+        'Remote body'
+      )
     })
   })
 
@@ -102,11 +120,15 @@ describe('issue modal', () => {
     const { client, number } = await openCardModal()
 
     const actorId = expectId(
-      await (await client.api.actors.$post({ json: { name: 'Agent Smith', kind: 'agent' } })).json(),
+      await (
+        await client.api.actors.$post({
+          json: { name: 'Agent Smith', kind: 'agent' }
+        })
+      ).json()
     )
     await client.api.projects[':slug'].issues[':number'].comments.$post({
       param: { slug, number: String(number) },
-      json: { actorId, body: 'Looks good to me' },
+      json: { actorId, body: 'Looks good to me' }
     })
 
     expect(await screen.findByText('Looks good to me')).toBeDefined()
@@ -143,7 +165,7 @@ describe('issue modal', () => {
   })
 
   test('the header New issue button creates via the same modal', async () => {
-    const { router, user } = await renderApp(async (client) => {
+    const { router, user } = await renderApp(async client => {
       await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } })
     })
     await router.navigate({ to: '/projects/$slug', params: { slug } })

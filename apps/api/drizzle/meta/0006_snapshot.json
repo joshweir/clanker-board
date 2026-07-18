@@ -88,9 +88,7 @@
       "indexes": {
         "boards_project_id_unique": {
           "name": "boards_project_id_unique",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": true
         }
       },
@@ -99,12 +97,8 @@
           "name": "boards_project_id_projects_id_fk",
           "tableFrom": "boards",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -159,12 +153,8 @@
           "name": "comments_issue_id_issues_id_fk",
           "tableFrom": "comments",
           "tableTo": "issues",
-          "columnsFrom": [
-            "issue_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["issue_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -172,12 +162,8 @@
           "name": "comments_actor_id_actors_id_fk",
           "tableFrom": "comments",
           "tableTo": "actors",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -210,12 +196,8 @@
           "name": "issue_blocked_by_issue_id_issues_id_fk",
           "tableFrom": "issue_blocked_by",
           "tableTo": "issues",
-          "columnsFrom": [
-            "issue_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["issue_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -223,22 +205,15 @@
           "name": "issue_blocked_by_blocker_id_issues_id_fk",
           "tableFrom": "issue_blocked_by",
           "tableTo": "issues",
-          "columnsFrom": [
-            "blocker_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["blocker_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "issue_blocked_by_issue_id_blocker_id_pk": {
-          "columns": [
-            "issue_id",
-            "blocker_id"
-          ],
+          "columns": ["issue_id", "blocker_id"],
           "name": "issue_blocked_by_issue_id_blocker_id_pk"
         }
       },
@@ -269,12 +244,8 @@
           "name": "issue_labels_issue_id_issues_id_fk",
           "tableFrom": "issue_labels",
           "tableTo": "issues",
-          "columnsFrom": [
-            "issue_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["issue_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -282,22 +253,15 @@
           "name": "issue_labels_label_id_labels_id_fk",
           "tableFrom": "issue_labels",
           "tableTo": "labels",
-          "columnsFrom": [
-            "label_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["label_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "issue_labels_issue_id_label_id_pk": {
-          "columns": [
-            "issue_id",
-            "label_id"
-          ],
+          "columns": ["issue_id", "label_id"],
           "name": "issue_labels_issue_id_label_id_pk"
         }
       },
@@ -399,10 +363,7 @@
       "indexes": {
         "issues_project_number_unique": {
           "name": "issues_project_number_unique",
-          "columns": [
-            "project_id",
-            "number"
-          ],
+          "columns": ["project_id", "number"],
           "isUnique": true
         }
       },
@@ -411,12 +372,8 @@
           "name": "issues_project_id_projects_id_fk",
           "tableFrom": "issues",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -424,12 +381,8 @@
           "name": "issues_assignee_id_actors_id_fk",
           "tableFrom": "issues",
           "tableTo": "actors",
-          "columnsFrom": [
-            "assignee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["assignee_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -437,12 +390,8 @@
           "name": "issues_parent_id_issues_id_fk",
           "tableFrom": "issues",
           "tableTo": "issues",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -495,10 +444,7 @@
       "indexes": {
         "labels_project_name_ci_unique": {
           "name": "labels_project_name_ci_unique",
-          "columns": [
-            "project_id",
-            "lower(\"name\")"
-          ],
+          "columns": ["project_id", "lower(\"name\")"],
           "isUnique": true
         }
       },
@@ -507,12 +453,8 @@
           "name": "labels_project_id_projects_id_fk",
           "tableFrom": "labels",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -565,9 +507,7 @@
       "indexes": {
         "projects_key_ci_unique": {
           "name": "projects_key_ci_unique",
-          "columns": [
-            "lower(\"key\")"
-          ],
+          "columns": ["lower(\"key\")"],
           "isUnique": true
         }
       },

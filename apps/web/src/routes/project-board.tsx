@@ -6,20 +6,32 @@ import {
   type DragStart,
   type DragUpdate,
   type DropResult,
-  type ResponderProvided,
+  type ResponderProvided
 } from '@hello-pangea/dnd'
 import { getRouteApi, Link } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent
+} from 'react'
+import type { ApiClient, Issue, Label } from '../api'
 import { layoutBoard, type BoardColumn } from '../board-layout'
 import { FilterBar } from '../components/filter-bar'
 import { IssueModal } from '../components/issue-modal'
 import { ProjectTabs } from '../components/project-tabs'
-import { matchesFilters, toFilters, toSearchValues, type Filters } from '../filters'
+import { SearchBox } from '../components/search-box'
+import {
+  matchesFilters,
+  toFilters,
+  toSearchValues,
+  type Filters
+} from '../filters'
 import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from '../move'
 import { upsertById } from '../upsert'
 import { useLiveIssues } from '../use-live-issues'
-import type { ApiClient, Issue, Label } from '../api'
 
 // Which issue the detail modal is showing: an existing card by id (kept fresh from
 // the live issues list) or create mode from the header's "New issue" button (#36).
@@ -40,29 +52,40 @@ async function persistMove(
   client: ApiClient,
   slug: string,
   number: number,
-  plan: ReturnType<typeof planMove>,
+  plan: ReturnType<typeof planMove>
 ): Promise<void> {
-  const labelParam = (labelId: number) => ({ slug, number: String(number), labelId: String(labelId) })
+  const labelParam = (labelId: number) => ({
+    slug,
+    number: String(number),
+    labelId: String(labelId)
+  })
   for (const labelId of plan.detach) {
-    const res = await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$delete({
-      param: labelParam(labelId),
+    const res = await client.api.projects[':slug'].issues[':number'].labels[
+      ':labelId'
+    ].$delete({
+      param: labelParam(labelId)
     })
     if (!res.ok) {
       throw new Error(`detach ${labelId} failed`)
     }
   }
   for (const labelId of plan.attach) {
-    const res = await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
-      param: labelParam(labelId),
+    const res = await client.api.projects[':slug'].issues[':number'].labels[
+      ':labelId'
+    ].$put({
+      param: labelParam(labelId)
     })
     if (!res.ok) {
       throw new Error(`attach ${labelId} failed`)
     }
   }
-  const json = plan.state === undefined ? { rank: plan.rank } : { rank: plan.rank, state: plan.state }
+  const json =
+    plan.state === undefined
+      ? { rank: plan.rank }
+      : { rank: plan.rank, state: plan.state }
   const res = await client.api.projects[':slug'].issues[':number'].$patch({
     param: { slug, number: String(number) },
-    json,
+    json
   })
   if (!res.ok) {
     throw new Error('rank patch failed')
@@ -73,14 +96,18 @@ async function persistMove(
 // quick-add lands in the right column before the label attach round-trips (#35).
 // A "No status" quick-add passes labelId === null and keeps the card label-less.
 function withAxisLabel(issue: Issue, labelId: number, labels: Label[]): Issue {
-  const label = labels.find((l) => l.id === labelId)
-  if (!label || issue.labels.some((l) => l.id === labelId)) {
+  const label = labels.find(l => l.id === labelId)
+  if (!label || issue.labels.some(l => l.id === labelId)) {
     return issue
   }
   return { ...issue, labels: [...issue.labels, label] }
 }
 
-const positionMessage = (title: string, column: BoardColumn, index: number): string =>
+const positionMessage = (
+  title: string,
+  column: BoardColumn,
+  index: number
+): string =>
   `${title}, position ${index + 1} of ${column.cards.length} in ${column.title}`
 
 // Title-only inline quick-add (#35): Enter (the form submit) creates a card. A single
@@ -89,7 +116,7 @@ const positionMessage = (title: string, column: BoardColumn, index: number): str
 function QuickAdd({
   columnTitle,
   position,
-  onAdd,
+  onAdd
 }: {
   columnTitle: string
   position: 'top' | 'bottom'
@@ -113,7 +140,9 @@ function QuickAdd({
         value={title}
         placeholder="Add a card"
         aria-label={`Add a card to the ${position} of ${columnTitle}`}
-        onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
+        onChange={(event: ChangeEvent<HTMLInputElement>) =>
+          setTitle(event.target.value)
+        }
       />
     </form>
   )
@@ -138,10 +167,15 @@ export function ProjectBoard() {
   // labels/issues converging off the per-project SSE stream (the issues list uses
   // the same hook, #37). A suppressed card's echoes are dropped until its drag
   // settles, and board.changed re-lays-out the columns - both on the one stream.
-  const { issues, setIssues, labels } = useLiveIssues(fetchImpl, slug, initial, {
-    ignoreIssueChange: (issue) => suppressed.current.has(issue.id),
-    onBoardChanged: setBoard,
-  })
+  const { issues, setIssues, labels } = useLiveIssues(
+    fetchImpl,
+    slug,
+    initial,
+    {
+      ignoreIssueChange: issue => suppressed.current.has(issue.id),
+      onBoardChanged: setBoard
+    }
+  )
 
   // Auto-dismiss the revert toast so a transient failure does not linger.
   useEffect(() => {
@@ -159,21 +193,41 @@ export function ProjectBoard() {
   // flowing into `issues` underneath; this recomputes on every change.
   const filters = toFilters(search)
   const hideDone = search.hideDone ?? true
-  const visibleIssues = issues.filter((issue) => matchesFilters(issue, filters))
+  const visibleIssues = issues.filter(issue => matchesFilters(issue, filters))
   const allColumns = layoutBoard(board.columnAxis, labels, visibleIssues)
-  const columns = hideDone ? allColumns.filter((column) => column.kind !== 'done') : allColumns
+  const columns = hideDone
+    ? allColumns.filter(column => column.kind !== 'done')
+    : allColumns
+  // Only the real axis columns reorder; keeping them the SOLE children of the column
+  // Droppable is what lets @hello-pangea/dnd shift its siblings to preview the drop
+  // (mixing in the non-draggable virtual columns suppresses that animation). The
+  // virtual "No status"/"Done" columns render as fixed siblings after it (#35).
+  const axisColumns = columns.filter(column => column.kind === 'axis')
+  const virtualColumns = columns.filter(column => column.kind !== 'axis')
 
   // The type axis is freeform (#28), so its filter options are the distinct types in
   // the live set (sorted for a stable order), not a fixed enum.
-  const types = [...new Set(issues.map((issue) => issue.type))].sort((a, b) => a.localeCompare(b))
+  const types = [...new Set(issues.map(issue => issue.type))].sort((a, b) =>
+    a.localeCompare(b)
+  )
 
   // A filter change rewrites only the axis query params (inactive axes collapse away,
   // keeping shared URLs clean); Hide Done is preserved (absent = its default, hidden).
   const hideDoneParam = (next: boolean) => (next ? undefined : false)
   const setFilters = (next: Filters) =>
-    void navigate({ search: () => ({ ...toSearchValues(next), hideDone: hideDoneParam(hideDone) }) })
+    void navigate({
+      search: () => ({
+        ...toSearchValues(next),
+        hideDone: hideDoneParam(hideDone)
+      })
+    })
   const setHideDone = (next: boolean) =>
-    void navigate({ search: () => ({ ...toSearchValues(filters), hideDone: hideDoneParam(next) }) })
+    void navigate({
+      search: () => ({
+        ...toSearchValues(filters),
+        hideDone: hideDoneParam(next)
+      })
+    })
 
   // A quick-add posts the issue, optimistically shows it in the target column, then
   // attaches the column's bound axis label (#35). The card's own echoes are suppressed
@@ -186,7 +240,7 @@ export function ProjectBoard() {
         try {
           const res = await client.api.projects[':slug'].issues.$post({
             param: { slug },
-            json: { title, type: DEFAULT_ISSUE_TYPE },
+            json: { title, type: DEFAULT_ISSUE_TYPE }
           })
           if (!res.ok) {
             throw new Error('create failed')
@@ -197,11 +251,20 @@ export function ProjectBoard() {
           }
           created = body
           suppressed.current.add(created.id)
-          const optimistic = column.labelId === null ? created : withAxisLabel(created, column.labelId, labels)
-          setIssues((prev) => upsertById(prev, optimistic))
+          const optimistic =
+            column.labelId === null
+              ? created
+              : withAxisLabel(created, column.labelId, labels)
+          setIssues(prev => upsertById(prev, optimistic))
           if (column.labelId !== null) {
-            const attach = await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
-              param: { slug, number: String(created.number), labelId: String(column.labelId) },
+            const attach = await client.api.projects[':slug'].issues[
+              ':number'
+            ].labels[':labelId'].$put({
+              param: {
+                slug,
+                number: String(created.number),
+                labelId: String(column.labelId)
+              }
             })
             if (!attach.ok) {
               throw new Error('attach failed')
@@ -214,7 +277,7 @@ export function ProjectBoard() {
           // the wrong column. If the create itself failed, there is nothing to undo.
           const c = created
           if (c) {
-            setIssues((prev) => upsertById(prev, c))
+            setIssues(prev => upsertById(prev, c))
           }
         } finally {
           if (created) {
@@ -223,31 +286,31 @@ export function ProjectBoard() {
         }
       })()
     },
-    [client, slug, labels, setIssues],
+    [client, slug, labels, setIssues]
   )
 
   const onDragStart = useCallback(
     (start: DragStart, provided: ResponderProvided) => {
       if (start.type === 'column') {
-        const column = columns.find((c) => c.key === start.draggableId)
+        const column = columns.find(c => c.key === start.draggableId)
         if (column) {
           provided.announce(
-            `Picked up column ${column.title}, position ${start.source.index + 1} of ${board.columnAxis.length}. Use the left and right arrow keys to move, space to drop.`,
+            `Picked up column ${column.title}, position ${start.source.index + 1} of ${board.columnAxis.length}. Use the left and right arrow keys to move, space to drop.`
           )
         }
         return
       }
       const id = Number(start.draggableId)
       suppressed.current.add(id)
-      const column = columns.find((c) => c.key === start.source.droppableId)
-      const card = issues.find((i) => i.id === id)
+      const column = columns.find(c => c.key === start.source.droppableId)
+      const card = issues.find(i => i.id === id)
       if (column && card) {
         provided.announce(
-          `Picked up ${positionMessage(card.title, column, start.source.index)}. Use the arrow keys to move, space to drop.`,
+          `Picked up ${positionMessage(card.title, column, start.source.index)}. Use the arrow keys to move, space to drop.`
         )
       }
     },
-    [columns, issues, board.columnAxis.length],
+    [columns, issues, board.columnAxis.length]
   )
 
   const onDragUpdate = useCallback(
@@ -257,9 +320,11 @@ export function ProjectBoard() {
           provided.announce('Not over a valid position.')
           return
         }
-        const column = columns.find((c) => c.key === update.draggableId)
+        const column = columns.find(c => c.key === update.draggableId)
         if (column) {
-          provided.announce(`Column ${column.title} is now in position ${update.destination.index + 1}.`)
+          provided.announce(
+            `Column ${column.title} is now in position ${update.destination.index + 1}.`
+          )
         }
         return
       }
@@ -267,12 +332,16 @@ export function ProjectBoard() {
         provided.announce('Not over a column.')
         return
       }
-      const column = columns.find((c) => c.key === update.destination?.droppableId)
+      const column = columns.find(
+        c => c.key === update.destination?.droppableId
+      )
       if (column) {
-        provided.announce(`Now in ${column.title}, position ${update.destination.index + 1}.`)
+        provided.announce(
+          `Now in ${column.title}, position ${update.destination.index + 1}.`
+        )
       }
     },
-    [columns],
+    [columns]
   )
 
   const onColumnDragEnd = useCallback(
@@ -282,17 +351,23 @@ export function ProjectBoard() {
         provided.announce('Column move cancelled.')
         return
       }
-      const column = columns.find((c) => c.key === result.draggableId)
-      const nextAxis = reorderColumnAxis(board.columnAxis, source.index, destination.index)
+      const column = columns.find(c => c.key === result.draggableId)
+      const nextAxis = reorderColumnAxis(
+        board.columnAxis,
+        source.index,
+        destination.index
+      )
       const previous = board
       // Optimistic re-layout, then PATCH the WHOLE axis; other open boards converge
       // off board.changed (#33). Our own board.changed just re-sets the same axis
       // (idempotent). On failure, restore the pre-move board and toast.
       setBoard({ ...board, columnAxis: nextAxis })
-      provided.announce(`Column ${column?.title ?? ''} moved to position ${destination.index + 1}.`)
+      provided.announce(
+        `Column ${column?.title ?? ''} moved to position ${destination.index + 1}.`
+      )
       void client.api.projects[':slug'].board
         .$patch({ param: { slug }, json: { columnAxis: nextAxis } })
-        .then((res) => {
+        .then(res => {
           if (!res.ok) {
             throw new Error('axis patch failed')
           }
@@ -302,7 +377,7 @@ export function ProjectBoard() {
           setToast('Could not reorder columns - reverted.')
         })
     },
-    [columns, board, client, slug],
+    [columns, board, client, slug]
   )
 
   const onDragEnd = useCallback(
@@ -319,13 +394,16 @@ export function ProjectBoard() {
         release()
         return
       }
-      if (destination.droppableId === source.droppableId && destination.index === source.index) {
+      if (
+        destination.droppableId === source.droppableId &&
+        destination.index === source.index
+      ) {
         provided.announce('Move cancelled.')
         release()
         return
       }
-      const target = columns.find((c) => c.key === destination.droppableId)
-      const dragged = issues.find((i) => i.id === id)
+      const target = columns.find(c => c.key === destination.droppableId)
+      const dragged = issues.find(i => i.id === id)
       if (!target || !dragged) {
         release()
         return
@@ -337,10 +415,12 @@ export function ProjectBoard() {
       // full column set (fetch/hold unfiltered neighbours) if exact ordering matters.
       const newRank = rankForDrop(target.cards, id, destination.index)
       const plan = planMove(dragged, target, board.columnAxis, newRank)
-      const labelById = new Map(labels.map((l) => [l.id, l]))
+      const labelById = new Map(labels.map(l => [l.id, l]))
       const optimistic = applyPlan(dragged, plan, labelById)
-      setIssues((prev) => upsertById(prev, optimistic))
-      provided.announce(`Dropped ${dragged.title} in ${target.title}, position ${destination.index + 1}.`)
+      setIssues(prev => upsertById(prev, optimistic))
+      provided.announce(
+        `Dropped ${dragged.title} in ${target.title}, position ${destination.index + 1}.`
+      )
       // Suppress this card's own echoes until the whole move persists, not just
       // until the drop: detach/attach/patch each republish issue.changed with an
       // INTERMEDIATE label set, which would flicker the card through a wrong column
@@ -354,20 +434,32 @@ export function ProjectBoard() {
           // succeeded, patch rejected) can leave the server half-applied; the board
           // reconciles to server truth on that card's next issue.changed. Add a
           // transactional move endpoint if partial writes ever need atomic rollback.
-          setIssues((prev) => upsertById(prev, dragged))
+          setIssues(prev => upsertById(prev, dragged))
           setToast(`Could not move ${dragged.title} - reverted.`)
         })
         .finally(release)
     },
-    [columns, board.columnAxis, labels, issues, client, slug, onColumnDragEnd, setIssues],
+    [
+      columns,
+      board.columnAxis,
+      labels,
+      issues,
+      client,
+      slug,
+      onColumnDragEnd,
+      setIssues
+    ]
   )
 
   // One column section (header + top/bottom quick-add + its card Droppable). Real
   // axis columns receive the column drag handle; the virtual columns pass null so
   // only the reorderable axis columns are draggable (#35). Done omits quick-add.
-  const renderColumnSection = (column: BoardColumn, dragHandleProps: DraggableProvidedDragHandleProps | null) => (
+  const renderColumnSection = (
+    column: BoardColumn,
+    dragHandleProps: DraggableProvidedDragHandleProps | null
+  ) => (
     <Droppable droppableId={column.key} key={column.key}>
-      {(dropProvided) => (
+      {dropProvided => (
         <section
           ref={dropProvided.innerRef}
           {...dropProvided.droppableProps}
@@ -376,7 +468,11 @@ export function ProjectBoard() {
         >
           <div className="board-column-header">
             {dragHandleProps ? (
-              <span className="column-drag-handle" {...dragHandleProps} aria-label={`Reorder ${column.title} column`}>
+              <span
+                className="column-drag-handle"
+                {...dragHandleProps}
+                aria-label={`Reorder ${column.title} column`}
+              >
                 <span aria-hidden="true">⣿</span>
               </span>
             ) : null}
@@ -386,41 +482,73 @@ export function ProjectBoard() {
             </span>
           </div>
           {column.kind === 'done' ? null : (
-            <QuickAdd columnTitle={column.title} position="top" onAdd={(title) => handleQuickAdd(column, title)} />
+            <QuickAdd
+              columnTitle={column.title}
+              position="top"
+              onAdd={title => handleQuickAdd(column, title)}
+            />
           )}
           <ul className="board-cards">
-            {column.cards.length === 0 ? <li className="board-empty">No cards</li> : null}
+            {column.cards.length === 0 ? (
+              <li className="board-empty">No cards</li>
+            ) : null}
             {column.cards.map((card, index) => (
-              <Draggable draggableId={String(card.id)} index={index} key={card.id}>
-                {(dragProvided, snapshot) => (
-                  // @hello-pangea/dnd spreads a runtime role="button" + tabIndex onto
-                  // this element (the drag handle: Space lifts, arrows move), so it is a
-                  // genuine interactive control - a plain click/Enter (which the drag
-                  // sensor leaves alone) opens the detail modal (#36). The a11y lint
-                  // rule can't see the spread role, hence the scoped disable below.
-                  // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-                  <li
-                    ref={dragProvided.innerRef}
-                    {...dragProvided.draggableProps}
-                    {...dragProvided.dragHandleProps}
-                    className={snapshot.isDragging ? 'board-card dragging' : 'board-card'}
-                    onClick={() => setModal({ kind: 'edit', id: card.id })}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        setModal({ kind: 'edit', id: card.id })
+              <Draggable
+                draggableId={String(card.id)}
+                index={index}
+                key={card.id}
+              >
+                {(dragProvided, snapshot) => {
+                  // Cut the drop animation: the move is already applied optimistically
+                  // to the target column, so letting the library glide the released
+                  // card from its old home first makes it flash (e.g. at the top of an
+                  // empty column) before settling. Snapping straight to the optimistic
+                  // position removes that interim frame (#34).
+                  const style = {
+                    ...dragProvided.draggableProps.style,
+                    ...(snapshot.isDropAnimating
+                      ? { transitionDuration: '0.001s' }
+                      : null)
+                  }
+                  return (
+                    // @hello-pangea/dnd spreads a runtime role="button" + tabIndex onto
+                    // this element (the drag handle: Space lifts, arrows move), so it is a
+                    // genuine interactive control - a plain click/Enter (which the drag
+                    // sensor leaves alone) opens the detail modal (#36). The a11y lint
+                    // rule can't see the spread role, hence the scoped disable below.
+                    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+                    <li
+                      ref={dragProvided.innerRef}
+                      {...dragProvided.draggableProps}
+                      {...dragProvided.dragHandleProps}
+                      style={style}
+                      className={
+                        snapshot.isDragging
+                          ? 'board-card dragging'
+                          : 'board-card'
                       }
-                    }}
-                  >
-                    <span className="board-card-key">{card.key}</span>
-                    <span className="board-card-title">{card.title}</span>
-                  </li>
-                )}
+                      onClick={() => setModal({ kind: 'edit', id: card.id })}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter') {
+                          setModal({ kind: 'edit', id: card.id })
+                        }
+                      }}
+                    >
+                      <span className="board-card-key">{card.key}</span>
+                      <span className="board-card-title">{card.title}</span>
+                    </li>
+                  )
+                }}
               </Draggable>
             ))}
             {dropProvided.placeholder}
           </ul>
           {column.kind === 'done' ? null : (
-            <QuickAdd columnTitle={column.title} position="bottom" onAdd={(title) => handleQuickAdd(column, title)} />
+            <QuickAdd
+              columnTitle={column.title}
+              position="bottom"
+              onAdd={title => handleQuickAdd(column, title)}
+            />
           )}
         </section>
       )}
@@ -433,72 +561,108 @@ export function ProjectBoard() {
         <Link to="/">← Projects</Link>
         <h1>{slug}</h1>
         <ProjectTabs slug={slug} />
-        <button type="button" className="new-issue" onClick={() => setModal({ kind: 'new' })}>
+        <SearchBox
+          client={client}
+          fetchImpl={fetchImpl}
+          slug={slug}
+          labels={labels}
+          issues={issues}
+        />
+        <button
+          type="button"
+          className="new-issue"
+          onClick={() => setModal({ kind: 'new' })}
+        >
           New issue
         </button>
       </header>
-      <FilterBar filters={filters} types={types} labels={labels} actors={initial.actors} onChange={setFilters}>
+      <FilterBar
+        filters={filters}
+        types={types}
+        labels={labels}
+        actors={initial.actors}
+        onChange={setFilters}
+      >
         <label className="filter-option">
-          <input type="checkbox" checked={hideDone} onChange={() => setHideDone(!hideDone)} />
+          <input
+            type="checkbox"
+            checked={hideDone}
+            onChange={() => setHideDone(!hideDone)}
+          />
           Hide Done
         </label>
       </FilterBar>
-      <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
-        <Droppable droppableId="board" direction="horizontal" type="column">
-          {(boardProvided) => (
-            <div ref={boardProvided.innerRef} {...boardProvided.droppableProps} className="board-columns">
-              {columns.map((column, columnIndex) =>
-                // Only the real axis columns are reorderable; they are the first
-                // columns laid out, so their column index equals their columnAxis
-                // index. The virtual "No status" and "Done" columns render fixed (#35).
-                column.kind === 'axis' ? (
-                  <Draggable draggableId={column.key} index={columnIndex} key={column.key}>
-                    {(colProvided) => (
+      <DragDropContext
+        onDragStart={onDragStart}
+        onDragUpdate={onDragUpdate}
+        onDragEnd={onDragEnd}
+      >
+        <div className="board-columns">
+          <Droppable droppableId="board" direction="horizontal" type="column">
+            {boardProvided => (
+              <div
+                ref={boardProvided.innerRef}
+                {...boardProvided.droppableProps}
+                className="board-axis-columns"
+              >
+                {axisColumns.map((column, index) => (
+                  // Index within the axis columns == this column's columnAxis index
+                  // (they are laid out in axis order), so a reorder maps straight back
+                  // onto the persisted axis.
+                  <Draggable
+                    draggableId={column.key}
+                    index={index}
+                    key={column.key}
+                  >
+                    {colProvided => (
                       <div
                         ref={colProvided.innerRef}
                         {...colProvided.draggableProps}
                         className="board-column-draggable"
                       >
-                        {renderColumnSection(column, colProvided.dragHandleProps)}
+                        {renderColumnSection(
+                          column,
+                          colProvided.dragHandleProps
+                        )}
                       </div>
                     )}
                   </Draggable>
-                ) : (
-                  renderColumnSection(column, null)
-                ),
-              )}
-              {boardProvided.placeholder}
-            </div>
-          )}
-        </Droppable>
+                ))}
+                {boardProvided.placeholder}
+              </div>
+            )}
+          </Droppable>
+          {virtualColumns.map(column => renderColumnSection(column, null))}
+        </div>
       </DragDropContext>
       {toast === null ? null : (
         <div className="toast" role="alert">
           {toast}
         </div>
       )}
-      {modal !== null ? (
-        // Edit mode resolves the card from the live issues list so the modal opens
-        // on a current snapshot (and closes itself if the card was deleted); create
-        // mode passes null. labels/issues feed the sidebar pickers (#36).
-        (() => {
-          const editing = modal.kind === 'edit' ? issues.find((i) => i.id === modal.id) : null
-          if (modal.kind === 'edit' && !editing) {
-            return null
-          }
-          return (
-            <IssueModal
-              client={client}
-              fetchImpl={fetchImpl}
-              slug={slug}
-              issue={editing ?? null}
-              labels={labels}
-              issues={issues}
-              onClose={() => setModal(null)}
-            />
-          )
-        })()
-      ) : null}
+      {modal !== null
+        ? // Edit mode resolves the card from the live issues list so the modal opens
+          // on a current snapshot (and closes itself if the card was deleted); create
+          // mode passes null. labels/issues feed the sidebar pickers (#36).
+          (() => {
+            const editing =
+              modal.kind === 'edit' ? issues.find(i => i.id === modal.id) : null
+            if (modal.kind === 'edit' && !editing) {
+              return null
+            }
+            return (
+              <IssueModal
+                client={client}
+                fetchImpl={fetchImpl}
+                slug={slug}
+                issue={editing ?? null}
+                labels={labels}
+                issues={issues}
+                onClose={() => setModal(null)}
+              />
+            )
+          })()
+        : null}
     </main>
   )
 }

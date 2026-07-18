@@ -1,10 +1,8 @@
 import { fileURLToPath } from 'node:url'
-
 import { hc } from 'hono/client'
-
 import { createApp, type AppType } from './app'
-import { createDb } from './db/client'
 import { resolveDbPath } from './db-path'
+import { createDb } from './db/client'
 
 // `pnpm seed` gives a developer something to look at immediately: one demo
 // project with a few labels and issues, created through the REAL api client (hc)
@@ -40,33 +38,33 @@ const ISSUES: IssueSeed[] = [
     title: 'Set up CI pipeline',
     type: 'chore',
     body: 'Wire lint, build, and test to run on every push.',
-    label: 'In Progress',
+    label: 'In Progress'
   },
   {
     title: 'Fix board drag flicker',
     type: 'bug',
     body: 'Cards briefly jump back to the source column before the drop settles.',
-    label: 'Backlog',
+    label: 'Backlog'
   },
   {
     title: 'Add search result highlighting',
     type: 'feature',
     body: 'Highlight the matched term in the search snippet.',
-    label: 'Review',
+    label: 'Review'
   },
   {
     title: 'Write API docs walkthrough',
     type: 'chore',
     body: 'A short guide to the /docs page for new contributors.',
     label: null,
-    closed: true,
+    closed: true
   },
   {
     title: 'Investigate WAL contention',
     type: 'spike',
     body: 'Confirm concurrent seed + dev writers do not lock the db.',
-    label: null,
-  },
+    label: null
+  }
 ]
 
 const fail = (what: string, status: number): never => {
@@ -76,7 +74,9 @@ const fail = (what: string, status: number): never => {
 export async function seed(client: SeedClient): Promise<void> {
   // Project (stable key). The typed client proves this GET is 200 or 404, so a
   // rerun creating nothing is a no-op: create only when it reports 404.
-  const existing = await client.api.projects[':slug'].$get({ param: { slug: SLUG } })
+  const existing = await client.api.projects[':slug'].$get({
+    param: { slug: SLUG }
+  })
   if (existing.status === 404) {
     const res = await client.api.projects.$post({ json: DEMO })
     if (res.status !== 201) fail('create project', res.status)
@@ -84,12 +84,17 @@ export async function seed(client: SeedClient): Promise<void> {
 
   // Labels (stable, case-insensitively-unique names). Fetch what exists, create
   // only the missing ones, and keep name -> id to attach and to build the axis.
-  const labelRes = await client.api.projects[':slug'].labels.$get({ param: { slug: SLUG } })
+  const labelRes = await client.api.projects[':slug'].labels.$get({
+    param: { slug: SLUG }
+  })
   if (labelRes.status !== 200) return fail('list labels', labelRes.status)
-  const labelId = new Map((await labelRes.json()).map((l) => [l.name, l.id]))
+  const labelId = new Map((await labelRes.json()).map(l => [l.name, l.id]))
   for (const name of AXIS_LABELS) {
     if (labelId.has(name)) continue
-    const res = await client.api.projects[':slug'].labels.$post({ param: { slug: SLUG }, json: { name } })
+    const res = await client.api.projects[':slug'].labels.$post({
+      param: { slug: SLUG },
+      json: { name }
+    })
     if (res.status !== 201) return fail(`create label "${name}"`, res.status)
     const created = await res.json()
     labelId.set(created.name, created.id)
@@ -97,31 +102,40 @@ export async function seed(client: SeedClient): Promise<void> {
 
   // Issues (stable titles). Create only missing titles; then attach the label
   // (idempotent PUT) and close if needed (setting state=closed again is a no-op).
-  const issueRes = await client.api.projects[':slug'].issues.$get({ param: { slug: SLUG } })
+  const issueRes = await client.api.projects[':slug'].issues.$get({
+    param: { slug: SLUG }
+  })
   if (issueRes.status !== 200) return fail('list issues', issueRes.status)
-  const issueNumber = new Map((await issueRes.json()).map((i) => [i.title, i.number]))
+  const issueNumber = new Map(
+    (await issueRes.json()).map(i => [i.title, i.number])
+  )
   for (const spec of ISSUES) {
     let number = issueNumber.get(spec.title)
     if (number === undefined) {
       const res = await client.api.projects[':slug'].issues.$post({
         param: { slug: SLUG },
-        json: { title: spec.title, type: spec.type, body: spec.body },
+        json: { title: spec.title, type: spec.type, body: spec.body }
       })
-      if (res.status !== 201) return fail(`create issue "${spec.title}"`, res.status)
+      if (res.status !== 201)
+        return fail(`create issue "${spec.title}"`, res.status)
       number = (await res.json()).number
     }
     if (spec.label !== null) {
       const id = labelId.get(spec.label)
-      if (id === undefined) throw new Error(`seed: unknown label "${spec.label}"`)
-      const res = await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
-        param: { slug: SLUG, number: String(number), labelId: String(id) },
+      if (id === undefined)
+        throw new Error(`seed: unknown label "${spec.label}"`)
+      const res = await client.api.projects[':slug'].issues[':number'].labels[
+        ':labelId'
+      ].$put({
+        param: { slug: SLUG, number: String(number), labelId: String(id) }
       })
-      if (res.status !== 200) return fail(`attach "${spec.label}" to "${spec.title}"`, res.status)
+      if (res.status !== 200)
+        return fail(`attach "${spec.label}" to "${spec.title}"`, res.status)
     }
     if (spec.closed) {
       const res = await client.api.projects[':slug'].issues[':number'].$patch({
         param: { slug: SLUG, number: String(number) },
-        json: { state: 'closed' },
+        json: { state: 'closed' }
       })
       if (res.status !== 200) return fail(`close "${spec.title}"`, res.status)
     }
@@ -129,12 +143,12 @@ export async function seed(client: SeedClient): Promise<void> {
 
   // Board axis = the demo labels, in order, so the seeded board renders columns.
   // PATCH replaces the whole axis, so rerunning sets the same value (idempotent).
-  const columnAxis = AXIS_LABELS.map((name) => labelId.get(name)).filter(
-    (id): id is number => id !== undefined,
+  const columnAxis = AXIS_LABELS.map(name => labelId.get(name)).filter(
+    (id): id is number => id !== undefined
   )
   const boardRes = await client.api.projects[':slug'].board.$patch({
     param: { slug: SLUG },
-    json: { columnAxis },
+    json: { columnAxis }
   })
   if (boardRes.status !== 200) fail('set board axis', boardRes.status)
 }
@@ -142,14 +156,19 @@ export async function seed(client: SeedClient): Promise<void> {
 async function main(): Promise<void> {
   // Dev-only guard: never seed a production database (trust boundary).
   if (process.env.NODE_ENV === 'production') {
-    console.error('pnpm seed is dev-only; refusing to run with NODE_ENV=production')
+    console.error(
+      'pnpm seed is dev-only; refusing to run with NODE_ENV=production'
+    )
     process.exit(1)
   }
   const app = createApp(createDb(resolveDbPath()))
   // async so app.request's Response | Promise<Response> satisfies fetch's Promise.
-  const fetchImpl: typeof fetch = async (input, init) => app.request(input, init)
+  const fetchImpl: typeof fetch = async (input, init) =>
+    app.request(input, init)
   await seed(hc<AppType>('http://localhost', { fetch: fetchImpl }))
-  console.log('Seeded the demo project. Run `pnpm dev` and open /projects/demo.')
+  console.log(
+    'Seeded the demo project. Run `pnpm dev` and open /projects/demo.'
+  )
 }
 
 // Only run when invoked directly (`tsx src/seed.ts`), not when the spec imports

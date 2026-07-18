@@ -1,5 +1,4 @@
 import { hc, type InferResponseType } from 'hono/client'
-
 import type { AppType } from '@clanker/api'
 
 // Hono RPC (`hc`) over same-origin relative URLs in dev and prod - no API-base
@@ -11,7 +10,9 @@ export function createClient(fetchImpl?: typeof fetch): ApiClient {
   return hc<AppType>('/', fetchImpl ? { fetch: fetchImpl } : {})
 }
 
-export type Project = InferResponseType<ApiClient['api']['projects']['$get']>[number]
+export type Project = InferResponseType<
+  ApiClient['api']['projects']['$get']
+>[number]
 
 // Per-project board data (#33). Second type arg pins the 200 body so the type is
 // the success shape, not the 200-or-404 union `.json()` would otherwise yield.
@@ -37,7 +38,9 @@ export type Comment = InferResponseType<
 
 // Instance-level identities (#28), caller-asserted (no auth). The modal attributes
 // comments and the assignee to an actor.
-export type Actor = InferResponseType<ApiClient['api']['actors']['$get']>[number]
+export type Actor = InferResponseType<
+  ApiClient['api']['actors']['$get']
+>[number]
 
 // Full-text search results (#39): grouped one-per-issue, each with the matched field
 // and a highlighted snippet. The 200 body pins the success shape past the 404 union.

@@ -1,9 +1,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { and, asc, eq, max } from 'drizzle-orm'
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
-
 import type { Db } from '../db/client'
-import { dependentsOf, findIssue, findProjectBySlug, toIssue } from '../db/queries'
+import {
+  dependentsOf,
+  findIssue,
+  findProjectBySlug,
+  toIssue
+} from '../db/queries'
 import { actors, issues } from '../db/schema'
 import { rankAfter } from '../domain/rank'
 import type { EventBus } from '../events/bus'
@@ -20,14 +24,14 @@ export const IssueSchema = createSelectSchema(issues)
     labels: z.array(LabelSchema),
     // Derived relationship state (#30), never stored: see toIssue.
     blocked: z.boolean().openapi({ example: false }),
-    ready: z.boolean().openapi({ example: true }),
+    ready: z.boolean().openapi({ example: true })
   })
   .openapi('Issue')
 
 const CreateIssueSchema = createInsertSchema(issues, {
-  title: (schema) => schema.min(1),
-  type: (schema) => schema.min(1, 'type is required'),
-  body: (schema) => schema.optional(),
+  title: schema => schema.min(1),
+  type: schema => schema.min(1, 'type is required'),
+  body: schema => schema.optional()
 })
   .pick({ title: true, type: true, body: true })
   .openapi('CreateIssue')
@@ -36,11 +40,18 @@ const CreateIssueSchema = createInsertSchema(issues, {
 // table (#14) so state's enum stays single-sourced; assigneeId is nullable so
 // null explicitly unassigns while absent leaves it be.
 const PatchIssueSchema = createInsertSchema(issues, {
-  title: (schema) => schema.min(1),
-  type: (schema) => schema.min(1),
-  rank: (schema) => schema.min(1),
+  title: schema => schema.min(1),
+  type: schema => schema.min(1),
+  rank: schema => schema.min(1)
 })
-  .pick({ title: true, body: true, type: true, state: true, rank: true, assigneeId: true })
+  .pick({
+    title: true,
+    body: true,
+    type: true,
+    state: true,
+    rank: true,
+    assigneeId: true
+  })
   .partial()
   .openapi('PatchIssue')
 
@@ -53,8 +64,8 @@ const listIssuesRoute = createRoute({
   request: { params: SlugParamSchema },
   responses: {
     200: jsonBody(z.array(IssueSchema), 'The project issues, ordered by rank'),
-    404: jsonBody(ErrorSchema, 'No project with this slug'),
-  },
+    404: jsonBody(ErrorSchema, 'No project with this slug')
+  }
 })
 
 const createIssueRoute = createRoute({
@@ -63,13 +74,16 @@ const createIssueRoute = createRoute({
   summary: 'Create an issue (assigns the next per-project number)',
   request: {
     params: SlugParamSchema,
-    body: { content: { 'application/json': { schema: CreateIssueSchema } }, required: true },
+    body: {
+      content: { 'application/json': { schema: CreateIssueSchema } },
+      required: true
+    }
   },
   responses: {
     201: jsonBody(IssueSchema, 'The created issue'),
     400: jsonBody(ErrorSchema, 'Validation failure'),
-    404: jsonBody(ErrorSchema, 'No project with this slug'),
-  },
+    404: jsonBody(ErrorSchema, 'No project with this slug')
+  }
 })
 
 const getIssueRoute = createRoute({
@@ -79,8 +93,8 @@ const getIssueRoute = createRoute({
   request: { params: IssueParamSchema },
   responses: {
     200: jsonBody(IssueSchema, 'The issue'),
-    404: jsonBody(ErrorSchema, 'No such project or issue'),
-  },
+    404: jsonBody(ErrorSchema, 'No such project or issue')
+  }
 })
 
 const patchIssueRoute = createRoute({
@@ -89,13 +103,16 @@ const patchIssueRoute = createRoute({
   summary: 'Update an issue (title, body, type, state, rank, assignee)',
   request: {
     params: IssueParamSchema,
-    body: { content: { 'application/json': { schema: PatchIssueSchema } }, required: true },
+    body: {
+      content: { 'application/json': { schema: PatchIssueSchema } },
+      required: true
+    }
   },
   responses: {
     200: jsonBody(IssueSchema, 'The updated issue'),
     400: jsonBody(ErrorSchema, 'Validation failure or unknown assignee'),
-    404: jsonBody(ErrorSchema, 'No such project or issue'),
-  },
+    404: jsonBody(ErrorSchema, 'No such project or issue')
+  }
 })
 
 const deleteIssueRoute = createRoute({
@@ -105,8 +122,8 @@ const deleteIssueRoute = createRoute({
   request: { params: IssueParamSchema },
   responses: {
     204: { description: 'Deleted' },
-    404: jsonBody(ErrorSchema, 'No such project or issue'),
-  },
+    404: jsonBody(ErrorSchema, 'No such project or issue')
+  }
 })
 
 export function issuesRouter(db: Db, bus: EventBus) {
@@ -116,9 +133,9 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!result.success) {
         return c.json({ error: z.prettifyError(result.error) }, 400)
       }
-    },
+    }
   })
-    .openapi(listIssuesRoute, (c) => {
+    .openapi(listIssuesRoute, c => {
       const project = findProjectBySlug(db, c.req.valid('param').slug)
       if (!project) {
         return c.json({ error: 'Project not found' }, 404)
@@ -130,11 +147,11 @@ export function issuesRouter(db: Db, bus: EventBus) {
         .orderBy(asc(issues.rank), asc(issues.number))
         .all()
       return c.json(
-        rows.map((row) => toIssue(db, row, project.key)),
-        200,
+        rows.map(row => toIssue(db, row, project.key)),
+        200
       )
     })
-    .openapi(createIssueRoute, (c) => {
+    .openapi(createIssueRoute, c => {
       const project = findProjectBySlug(db, c.req.valid('param').slug)
       if (!project) {
         return c.json({ error: 'Project not found' }, 404)
@@ -152,7 +169,14 @@ export function issuesRouter(db: Db, bus: EventBus) {
       const rank = rankAfter(agg?.maxRank ?? null)
       const row = db
         .insert(issues)
-        .values({ projectId: project.id, number, title, type, body: body ?? '', rank })
+        .values({
+          projectId: project.id,
+          number,
+          title,
+          type,
+          body: body ?? '',
+          rank
+        })
         .returning()
         .get()
       // A brand-new issue has no labels, no parent, and no blockers (ready).
@@ -160,7 +184,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
       bus.publishIssueChanged(project.id, issue)
       return c.json(issue, 201)
     })
-    .openapi(getIssueRoute, (c) => {
+    .openapi(getIssueRoute, c => {
       const { slug, number } = c.req.valid('param')
       const project = findProjectBySlug(db, slug)
       if (!project) {
@@ -172,7 +196,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
       }
       return c.json(toIssue(db, row, project.key), 200)
     })
-    .openapi(patchIssueRoute, (c) => {
+    .openapi(patchIssueRoute, c => {
       const { slug, number } = c.req.valid('param')
       const project = findProjectBySlug(db, slug)
       if (!project) {
@@ -185,7 +209,11 @@ export function issuesRouter(db: Db, bus: EventBus) {
       // Reject an assignee that is not a real actor (trust boundary); null is a
       // valid value meaning "unassigned".
       if (patch.assigneeId !== undefined && patch.assigneeId !== null) {
-        const actor = db.select().from(actors).where(eq(actors.id, patch.assigneeId)).get()
+        const actor = db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, patch.assigneeId))
+          .get()
         if (!actor) {
           return c.json({ error: `No actor with id ${patch.assigneeId}` }, 400)
         }
@@ -205,12 +233,15 @@ export function issuesRouter(db: Db, bus: EventBus) {
       // them too and open clients converge (#30), mirroring the label re-publish.
       if (patch.state !== undefined) {
         for (const dependent of dependentsOf(db, row.id)) {
-          bus.publishIssueChanged(project.id, toIssue(db, dependent, project.key))
+          bus.publishIssueChanged(
+            project.id,
+            toIssue(db, dependent, project.key)
+          )
         }
       }
       return c.json(issue, 200)
     })
-    .openapi(deleteIssueRoute, (c) => {
+    .openapi(deleteIssueRoute, c => {
       const { slug, number } = c.req.valid('param')
       const project = findProjectBySlug(db, slug)
       if (!project) {

@@ -1,15 +1,14 @@
 import { describe, expect, test } from 'vitest'
-
+import type { Issue, Label } from './api'
 import type { BoardColumn } from './board-layout'
 import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from './move'
-import type { Issue, Label } from './api'
 
 const label = (id: number, name: string): Label => ({
   id,
   projectId: 1,
   name,
   createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z'
 })
 
 const issue = (over: Partial<Issue> & Pick<Issue, 'id'>): Issue => ({
@@ -28,7 +27,7 @@ const issue = (over: Partial<Issue> & Pick<Issue, 'id'>): Issue => ({
   ready: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
-  ...over,
+  ...over
 })
 
 const todo = label(10, 'To Do')
@@ -40,10 +39,22 @@ const axisColumn = (labelId: number): BoardColumn => ({
   title: `col ${labelId}`,
   labelId,
   kind: 'axis',
-  cards: [],
+  cards: []
 })
-const noStatus: BoardColumn = { key: 'no-status', title: 'No status', labelId: null, kind: 'no-status', cards: [] }
-const done: BoardColumn = { key: 'done', title: 'Done', labelId: null, kind: 'done', cards: [] }
+const noStatus: BoardColumn = {
+  key: 'no-status',
+  title: 'No status',
+  labelId: null,
+  kind: 'no-status',
+  cards: []
+}
+const done: BoardColumn = {
+  key: 'done',
+  title: 'Done',
+  labelId: null,
+  kind: 'done',
+  cards: []
+}
 const axis = [10, 20]
 
 describe('planMove', () => {
@@ -62,38 +73,53 @@ describe('planMove', () => {
   test('into Done closes and keeps the label', () => {
     const card = issue({ id: 1, labels: [todo] })
     const plan = planMove(card, done, axis, 'a5')
-    expect(plan).toEqual({ rank: 'a5', attach: [], detach: [], state: 'closed' })
+    expect(plan).toEqual({
+      rank: 'a5',
+      attach: [],
+      detach: [],
+      state: 'closed'
+    })
   })
 
   test('out of Done into an axis column reopens and sets the new label', () => {
     const card = issue({ id: 1, state: 'closed', labels: [todo] })
     const plan = planMove(card, axisColumn(20), axis, 'a5')
-    expect(plan).toEqual({ rank: 'a5', attach: [20], detach: [10], state: 'open' })
+    expect(plan).toEqual({
+      rank: 'a5',
+      attach: [20],
+      detach: [10],
+      state: 'open'
+    })
   })
 
   test('into No status reopens and clears every axis label, keeping non-axis labels', () => {
     const card = issue({ id: 1, state: 'closed', labels: [todo, doing, bug] })
     const plan = planMove(card, noStatus, axis, 'a5')
-    expect(plan).toEqual({ rank: 'a5', attach: [], detach: [10, 20], state: 'open' })
+    expect(plan).toEqual({
+      rank: 'a5',
+      attach: [],
+      detach: [10, 20],
+      state: 'open'
+    })
   })
 })
 
 describe('applyPlan', () => {
-  const labelById = new Map([todo, doing, bug].map((l) => [l.id, l]))
+  const labelById = new Map([todo, doing, bug].map(l => [l.id, l]))
 
   test('applies rank, state and the label swap optimistically', () => {
     const card = issue({ id: 1, labels: [todo, bug] })
     const plan = planMove(card, axisColumn(20), axis, 'a5')
     const next = applyPlan(card, plan, labelById)
     expect(next.rank).toBe('a5')
-    expect(next.labels.map((l) => l.id).sort((a, b) => a - b)).toEqual([20, 99])
+    expect(next.labels.map(l => l.id).sort((a, b) => a - b)).toEqual([20, 99])
   })
 
   test('into Done keeps labels, flips state', () => {
     const card = issue({ id: 1, labels: [todo] })
     const next = applyPlan(card, planMove(card, done, axis, 'a5'), labelById)
     expect(next.state).toBe('closed')
-    expect(next.labels.map((l) => l.id)).toEqual([10])
+    expect(next.labels.map(l => l.id)).toEqual([10])
   })
 })
 
@@ -114,7 +140,11 @@ describe('reorderColumnAxis', () => {
 })
 
 describe('rankForDrop', () => {
-  const cards = [issue({ id: 1, rank: 'a0' }), issue({ id: 2, rank: 'a1' }), issue({ id: 3, rank: 'a2' })]
+  const cards = [
+    issue({ id: 1, rank: 'a0' }),
+    issue({ id: 2, rank: 'a1' }),
+    issue({ id: 3, rank: 'a2' })
+  ]
 
   test('to the top lands before the first card', () => {
     expect(rankForDrop(cards, 3, 0) < 'a0').toBe(true)

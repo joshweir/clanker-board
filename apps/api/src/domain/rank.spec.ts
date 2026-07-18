@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'vitest'
-
 import { rankAfter } from './rank'
 
 describe('rankAfter', () => {

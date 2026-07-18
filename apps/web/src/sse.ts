@@ -9,11 +9,14 @@ export async function readEventStream(
   fetchImpl: typeof fetch,
   path: string,
   signal: AbortSignal,
-  onEvent: (event: string, data: unknown) => void,
+  onEvent: (event: string, data: unknown) => void
 ): Promise<void> {
   let response: Response
   try {
-    response = await fetchImpl(path, { signal, headers: { accept: 'text/event-stream' } })
+    response = await fetchImpl(path, {
+      signal,
+      headers: { accept: 'text/event-stream' }
+    })
   } catch {
     return // aborted before the stream opened
   }
@@ -42,7 +45,10 @@ export async function readEventStream(
   }
 }
 
-function dispatchFrame(frame: string, onEvent: (event: string, data: unknown) => void): void {
+function dispatchFrame(
+  frame: string,
+  onEvent: (event: string, data: unknown) => void
+): void {
   let event = 'message'
   const dataLines: string[] = []
   for (const line of frame.split('\n')) {

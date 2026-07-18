@@ -1,6 +1,5 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, mergeConfig } from 'vitest/config'
-
 import base from '../../vitest.config'
 
 // Seam 2 runs under jsdom (#10/#12) with the React plugin for JSX transforms.
@@ -13,7 +12,7 @@ export default mergeConfig(
     test: {
       environment: 'jsdom',
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
-      setupFiles: ['./src/test/setup.ts'],
-    },
-  }),
+      setupFiles: ['./src/test/setup.ts']
+    }
+  })
 )

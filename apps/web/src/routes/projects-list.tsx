@@ -1,20 +1,20 @@
 import { getRouteApi, Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
-
+import type { Project } from '../api'
 import { CreateProjectModal } from '../components/create-project-modal'
 import { DeleteProjectModal } from '../components/delete-project-modal'
 import { subscribeToInstanceEvents } from '../events'
-import type { Project } from '../api'
 
 const route = getRouteApi('/')
 
-type ActiveModal = { kind: 'create' } | { kind: 'delete'; project: Project } | null
+type ActiveModal =
+  { kind: 'create' } | { kind: 'delete'; project: Project } | null
 
 // Coarse-snapshot convergence: upsert by id (idempotent), keeping the server's
 // key order so a project created anywhere lands in the right place (#27).
 function upsertById(list: Project[], project: Project): Project[] {
-  const next = list.some((p) => p.id === project.id)
-    ? list.map((p) => (p.id === project.id ? project : p))
+  const next = list.some(p => p.id === project.id)
+    ? list.map(p => (p.id === project.id ? project : p))
     : [...list, project]
   return next.sort((a, b) => a.key.localeCompare(b.key))
 }
@@ -31,10 +31,10 @@ export function ProjectsList() {
   useEffect(
     () =>
       subscribeToInstanceEvents(fetchImpl, {
-        onChanged: (project) => setProjects((prev) => upsertById(prev, project)),
-        onDeleted: (id) => setProjects((prev) => prev.filter((p) => p.id !== id)),
+        onChanged: project => setProjects(prev => upsertById(prev, project)),
+        onDeleted: id => setProjects(prev => prev.filter(p => p.id !== id))
       }),
-    [fetchImpl],
+    [fetchImpl]
   )
 
   const closeModal = () => setModal(null)
@@ -59,7 +59,7 @@ export function ProjectsList() {
         </div>
       ) : (
         <ul className="project-list">
-          {projects.map((project) => (
+          {projects.map(project => (
             <li key={project.id} className="project-row">
               <Link to="/projects/$slug" params={{ slug: project.slug }}>
                 <span className="project-key">{project.key}</span>
@@ -78,7 +78,11 @@ export function ProjectsList() {
       )}
 
       {modal?.kind === 'create' ? (
-        <CreateProjectModal client={client} onClose={closeModal} onCreated={closeModal} />
+        <CreateProjectModal
+          client={client}
+          onClose={closeModal}
+          onCreated={closeModal}
+        />
       ) : null}
       {modal?.kind === 'delete' ? (
         <DeleteProjectModal

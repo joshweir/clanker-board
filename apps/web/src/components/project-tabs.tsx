@@ -24,14 +24,6 @@ export function ProjectTabs({ slug }: { slug: string }) {
       >
         Issues
       </Link>
-      <Link
-        to="/projects/$slug/search"
-        params={{ slug }}
-        className="project-tab"
-        activeProps={{ 'aria-current': 'page' }}
-      >
-        Search
-      </Link>
     </nav>
   )
 }

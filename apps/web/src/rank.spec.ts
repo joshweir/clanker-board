@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'vitest'
-
 import { rankBetween } from './rank'
 
 // rankBetween shares fractional-indexing's default base-62 alphabet with the server

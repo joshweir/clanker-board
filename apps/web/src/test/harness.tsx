@@ -1,9 +1,7 @@
 import { RouterProvider } from '@tanstack/react-router'
 import { render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-
 import { createApp, createDb } from '@clanker/api'
-
 import { createClient, type ApiClient } from '../api'
 import { createAppRouter } from '../router'
 
@@ -15,7 +13,7 @@ export async function renderApp(
   seed?: (client: ApiClient) => Promise<void>,
   // Optionally decorate the transport (e.g. to inject a server rejection) so tests
   // can drive the optimistic revert path (#34) without mocking the api itself.
-  wrapFetch?: (base: typeof fetch) => typeof fetch,
+  wrapFetch?: (base: typeof fetch) => typeof fetch
 ) {
   const app = createApp(createDb(':memory:'))
   const base: typeof fetch = async (input, init) => app.request(input, init)

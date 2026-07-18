@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
+import type { Board, Issue, Label } from './api'
 import { subscribeToProjectEvents } from './project-events'
 import { upsertById } from './upsert'
-import type { Board, Issue, Label } from './api'
 
 // The board and the issues list both seed issues + labels from their loader, then
 // converge live off the same per-project SSE stream: upsert-by-id on issue/label
@@ -27,7 +32,7 @@ export function useLiveIssues(
   fetchImpl: typeof fetch,
   slug: string,
   initial: { issues: Issue[]; labels: Label[] },
-  hooks?: LiveIssuesHooks,
+  hooks?: LiveIssuesHooks
 ): LiveIssues {
   const [issues, setIssues] = useState(initial.issues)
   const [labels, setLabels] = useState(initial.labels)
@@ -40,14 +45,18 @@ export function useLiveIssues(
   useEffect(
     () =>
       subscribeToProjectEvents(fetchImpl, slug, {
-        onIssueChanged: (issue) =>
-          setIssues((prev) => (hooksRef.current?.ignoreIssueChange?.(issue) ? prev : upsertById(prev, issue))),
-        onIssueDeleted: (id) => setIssues((prev) => prev.filter((i) => i.id !== id)),
-        onLabelChanged: (label) => setLabels((prev) => upsertById(prev, label)),
-        onLabelDeleted: (id) => setLabels((prev) => prev.filter((l) => l.id !== id)),
-        onBoardChanged: (next) => hooksRef.current?.onBoardChanged?.(next),
+        onIssueChanged: issue =>
+          setIssues(prev =>
+            hooksRef.current?.ignoreIssueChange?.(issue)
+              ? prev
+              : upsertById(prev, issue)
+          ),
+        onIssueDeleted: id => setIssues(prev => prev.filter(i => i.id !== id)),
+        onLabelChanged: label => setLabels(prev => upsertById(prev, label)),
+        onLabelDeleted: id => setLabels(prev => prev.filter(l => l.id !== id)),
+        onBoardChanged: next => hooksRef.current?.onBoardChanged?.(next)
       }),
-    [fetchImpl, slug],
+    [fetchImpl, slug]
   )
 
   return { issues, setIssues, labels }

@@ -1,11 +1,11 @@
 import { sql } from 'drizzle-orm'
 import {
-  type AnySQLiteColumn,
   integer,
   primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
+  type AnySQLiteColumn
 } from 'drizzle-orm/sqlite-core'
 
 // Drizzle tables are the single source of truth (#14): drizzle-zod derives the
@@ -22,13 +22,13 @@ export const projects = sqliteTable(
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
     updatedAt: text('updated_at')
       .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
   },
-  (table) => [
+  table => [
     // Keys are regex-constrained to uppercase at the API boundary; this index
     // enforces case-insensitive uniqueness at the storage layer regardless.
-    uniqueIndex('projects_key_ci_unique').on(sql`lower(${table.key})`),
-  ],
+    uniqueIndex('projects_key_ci_unique').on(sql`lower(${table.key})`)
+  ]
 )
 
 // Actors are instance-level identities (#18): caller-asserted human | agent, no
@@ -40,7 +40,7 @@ export const actors = sqliteTable('actors', {
   kind: text('kind', { enum: ['human', 'agent'] }).notNull(),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
 })
 
 // Issues belong to a project and carry a per-project sequential `number` (the
@@ -65,22 +65,32 @@ export const issues = sqliteTable(
     // Lexicographic fractional rank (see domain/rank.ts) for drag ordering.
     rank: text('rank').notNull(),
     // Single nullable assignee; nulled if the actor is ever removed.
-    assigneeId: integer('assignee_id').references(() => actors.id, { onDelete: 'set null' }),
+    assigneeId: integer('assignee_id').references(() => actors.id, {
+      onDelete: 'set null'
+    }),
     // Single nullable parent (#30): work nests into a tree, an epic is just an
     // issue with children. Acyclicity is enforced at the API boundary. Deleting a
     // parent orphans its children (set null) rather than cascading the subtree; the
     // self-reference needs the explicit return type to break drizzle's inference.
-    parentId: integer('parent_id').references((): AnySQLiteColumn => issues.id, {
-      onDelete: 'set null',
-    }),
+    parentId: integer('parent_id').references(
+      (): AnySQLiteColumn => issues.id,
+      {
+        onDelete: 'set null'
+      }
+    ),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
     updatedAt: text('updated_at')
       .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
   },
-  (table) => [uniqueIndex('issues_project_number_unique').on(table.projectId, table.number)],
+  table => [
+    uniqueIndex('issues_project_number_unique').on(
+      table.projectId,
+      table.number
+    )
+  ]
 )
 
 // Labels are strictly per-project (#24): defining "bug" in one project never
@@ -100,11 +110,14 @@ export const labels = sqliteTable(
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
     updatedAt: text('updated_at')
       .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
   },
-  (table) => [
-    uniqueIndex('labels_project_name_ci_unique').on(table.projectId, sql`lower(${table.name})`),
-  ],
+  table => [
+    uniqueIndex('labels_project_name_ci_unique').on(
+      table.projectId,
+      sql`lower(${table.name})`
+    )
+  ]
 )
 
 // The Board is a stored view configuration (#24): exactly one per project, created
@@ -125,7 +138,7 @@ export const boards = sqliteTable('boards', {
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
   updatedAt: text('updated_at')
     .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
 })
 
 // Many-to-many attachment of labels to issues (#24): several labels per issue to
@@ -140,9 +153,9 @@ export const issueLabels = sqliteTable(
       .references(() => issues.id, { onDelete: 'cascade' }),
     labelId: integer('label_id')
       .notNull()
-      .references(() => labels.id, { onDelete: 'cascade' }),
+      .references(() => labels.id, { onDelete: 'cascade' })
   },
-  (table) => [primaryKey({ columns: [table.issueId, table.labelId] })],
+  table => [primaryKey({ columns: [table.issueId, table.labelId] })]
 )
 
 // Blocking DAG (#30): an edge (issue_id, blocker_id) means issue_id is blocked by
@@ -158,9 +171,9 @@ export const issueBlockedBy = sqliteTable(
       .references(() => issues.id, { onDelete: 'cascade' }),
     blockerId: integer('blocker_id')
       .notNull()
-      .references(() => issues.id, { onDelete: 'cascade' }),
+      .references(() => issues.id, { onDelete: 'cascade' })
   },
-  (table) => [primaryKey({ columns: [table.issueId, table.blockerId] })],
+  table => [primaryKey({ columns: [table.issueId, table.blockerId] })]
 )
 
 // Discussion on an issue (#24): a flat, append-only, actor-attributed log - no
@@ -180,5 +193,5 @@ export const comments = sqliteTable('comments', {
   body: text('body').notNull(),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
 })

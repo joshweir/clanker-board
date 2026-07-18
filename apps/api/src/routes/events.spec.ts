@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test } from 'vitest'
-
 import { createApp } from '../app'
 import { createDb } from '../db/client'
 import { nextEventOfType, readEvents } from '../test/sse'
@@ -18,11 +17,14 @@ const createProject = async (body: unknown) =>
   app.request('/api/projects', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   })
 
 const nameOf = (data: unknown): string | undefined =>
-  typeof data === 'object' && data !== null && 'name' in data && typeof data.name === 'string'
+  typeof data === 'object' &&
+  data !== null &&
+  'name' in data &&
+  typeof data.name === 'string'
     ? data.name
     : undefined
 
@@ -45,12 +47,14 @@ describe('GET /api/events (instance stream)', () => {
     await createProject({ name: 'Old', key: 'DEMO' })
     const controller = new AbortController()
     // Connecting after the create replays it; drain past the replay to the rename.
-    const events = readEvents(await app.request('/api/events', { signal: controller.signal }))
+    const events = readEvents(
+      await app.request('/api/events', { signal: controller.signal })
+    )
 
     await app.request('/api/projects/demo', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'New Name' }),
+      body: JSON.stringify({ name: 'New Name' })
     })
     // Two project.changed frames arrive (replay of Old, then the rename); the last
     // one carries the new name.
@@ -58,7 +62,11 @@ describe('GET /api/events (instance stream)', () => {
     while (nameOf(latest.data) !== 'New Name') {
       latest = await nextEventOfType(events, 'project.changed')
     }
-    expect(latest.data).toMatchObject({ key: 'DEMO', name: 'New Name', slug: 'demo' })
+    expect(latest.data).toMatchObject({
+      key: 'DEMO',
+      name: 'New Name',
+      slug: 'demo'
+    })
 
     controller.abort()
   })
@@ -66,7 +74,9 @@ describe('GET /api/events (instance stream)', () => {
   test('emits project.deleted with the id on delete', async () => {
     await createProject({ name: 'Doomed', key: 'DOOM' })
     const controller = new AbortController()
-    const events = readEvents(await app.request('/api/events', { signal: controller.signal }))
+    const events = readEvents(
+      await app.request('/api/events', { signal: controller.signal })
+    )
 
     await app.request('/api/projects/doom', { method: 'DELETE' })
     const evt = await nextEventOfType(events, 'project.deleted')
@@ -78,7 +88,9 @@ describe('GET /api/events (instance stream)', () => {
   test('replays existing projects on connect so a late tab converges', async () => {
     await createProject({ name: 'Alpha', key: 'ALPHA' })
     const controller = new AbortController()
-    const events = readEvents(await app.request('/api/events', { signal: controller.signal }))
+    const events = readEvents(
+      await app.request('/api/events', { signal: controller.signal })
+    )
 
     const evt = await nextEventOfType(events, 'project.changed')
     expect(evt.data).toMatchObject({ key: 'ALPHA', slug: 'alpha' })
@@ -91,7 +103,9 @@ describe('GET /api/projects/:slug/events (per-project stream)', () => {
   test('opens an event stream for an existing project', async () => {
     await createProject({ name: 'Demo', key: 'DEMO' })
     const controller = new AbortController()
-    const res = await app.request('/api/projects/demo/events', { signal: controller.signal })
+    const res = await app.request('/api/projects/demo/events', {
+      signal: controller.signal
+    })
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('text/event-stream')
     controller.abort()

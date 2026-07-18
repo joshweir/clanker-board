@@ -1,10 +1,15 @@
 import { getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
-
 import { FilterBar } from '../components/filter-bar'
 import { IssueModal } from '../components/issue-modal'
 import { ProjectTabs } from '../components/project-tabs'
-import { matchesFilters, toFilters, toSearchValues, type Filters } from '../filters'
+import { SearchBox } from '../components/search-box'
+import {
+  matchesFilters,
+  toFilters,
+  toSearchValues,
+  type Filters
+} from '../filters'
 import { useLiveIssues } from '../use-live-issues'
 
 const route = getRouteApi('/projects/$slug/issues')
@@ -32,14 +37,21 @@ export function ProjectIssues() {
   // axis params (inactive axes collapse away); state is preserved (absent = Open).
   const filters = toFilters(search)
   const state = search.state ?? 'open'
-  const stateParam = (next: 'open' | 'closed' | 'all') => (next === 'open' ? undefined : next)
+  const stateParam = (next: 'open' | 'closed' | 'all') =>
+    next === 'open' ? undefined : next
   const setFilters = (next: Filters) =>
-    void navigate({ search: () => ({ ...toSearchValues(next), state: stateParam(state) }) })
+    void navigate({
+      search: () => ({ ...toSearchValues(next), state: stateParam(state) })
+    })
   const setState = (next: 'open' | 'closed' | 'all') =>
-    void navigate({ search: () => ({ ...toSearchValues(filters), state: stateParam(next) }) })
+    void navigate({
+      search: () => ({ ...toSearchValues(filters), state: stateParam(next) })
+    })
 
   // The type axis is freeform (#28): options are the distinct types in the live set.
-  const types = [...new Set(issues.map((issue) => issue.type))].sort((a, b) => a.localeCompare(b))
+  const types = [...new Set(issues.map(issue => issue.type))].sort((a, b) =>
+    a.localeCompare(b)
+  )
 
   // Actors are a load-time snapshot (assignee names only); the issue read model
   // exposes assigneeId, so resolve the name here. The unassigned case renders blank.
@@ -49,18 +61,21 @@ export function ProjectIssues() {
   // until reload. Add an actor stream (or embed the assignee name in the issue read
   // model) to make the name column fully live.
   const assigneeName = (assigneeId: number | null): string =>
-    assigneeId === null ? '' : (initial.actors.find((a) => a.id === assigneeId)?.name ?? 'Unknown')
+    assigneeId === null
+      ? ''
+      : (initial.actors.find(a => a.id === assigneeId)?.name ?? 'Unknown')
 
   // A stable, dense reading order: ascending issue number (KEY-1, KEY-2, ...). The
   // board owns rank-based ordering; the list just needs a deterministic sort. Rows
   // are reduced by the filter axes AND this list's Open/Closed/All state (#38) - a
   // client-side view over the live set, never a server mutation.
   const rows = issues
-    .filter((issue) => matchesFilters(issue, filters))
-    .filter((issue) => state === 'all' || issue.state === state)
+    .filter(issue => matchesFilters(issue, filters))
+    .filter(issue => state === 'all' || issue.state === state)
     .sort((a, b) => a.number - b.number)
 
-  const editing = modalId === null ? null : (issues.find((i) => i.id === modalId) ?? null)
+  const editing =
+    modalId === null ? null : (issues.find(i => i.id === modalId) ?? null)
 
   return (
     <main className="issues">
@@ -68,12 +83,28 @@ export function ProjectIssues() {
         <Link to="/">← Projects</Link>
         <h1>{slug}</h1>
         <ProjectTabs slug={slug} />
+        <SearchBox
+          client={client}
+          fetchImpl={fetchImpl}
+          slug={slug}
+          labels={labels}
+          issues={issues}
+        />
       </header>
 
-      <FilterBar filters={filters} types={types} labels={labels} actors={initial.actors} onChange={setFilters}>
+      <FilterBar
+        filters={filters}
+        types={types}
+        labels={labels}
+        actors={initial.actors}
+        onChange={setFilters}
+      >
         <label className="filter-group filter-state">
           <span>State</span>
-          <select value={state} onChange={(event) => setState(parseState(event.target.value))}>
+          <select
+            value={state}
+            onChange={event => setState(parseState(event.target.value))}
+          >
             <option value="open">Open</option>
             <option value="closed">Closed</option>
             <option value="all">All</option>
@@ -93,7 +124,7 @@ export function ProjectIssues() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((issue) => (
+          {rows.map(issue => (
             // Native table semantics preserved: the accessible open control is a real
             // button on the issue key (keyboard-reachable, Enter/Space activate it
             // natively), which opens the shared detail modal (#36). The row-level
@@ -101,7 +132,11 @@ export function ProjectIssues() {
             // opens it too; keyboard users go through the button. The a11y lint rule
             // can't tell the click is progressive enhancement, hence the scoped disable.
             // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
-            <tr key={issue.id} className="issue-row" onClick={() => setModalId(issue.id)}>
+            <tr
+              key={issue.id}
+              className="issue-row"
+              onClick={() => setModalId(issue.id)}
+            >
               <td className="issue-cell-key">
                 <button
                   type="button"
@@ -120,7 +155,7 @@ export function ProjectIssues() {
               <td>{assigneeName(issue.assigneeId)}</td>
               <td>
                 <ul className="label-chips">
-                  {issue.labels.map((label) => (
+                  {issue.labels.map(label => (
                     <li key={label.id} className="label-chip">
                       {label.name}
                     </li>

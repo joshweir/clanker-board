@@ -1,6 +1,5 @@
 import { z } from '@hono/zod-openapi'
 import { beforeEach, describe, expect, test } from 'vitest'
-
 import { createApp } from '../app'
 import { createDb } from '../db/client'
 import { nextEventOfType, readEvents } from '../test/sse'
@@ -16,36 +15,54 @@ beforeEach(() => {
 
 const json = (body: unknown) => ({
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(body),
+  body: JSON.stringify(body)
 })
 
 const createProject = async (key: string, name = key) =>
   app.request('/api/projects', { method: 'POST', ...json({ key, name }) })
 
 const createIssue = async (slug: string, title = 'Issue') =>
-  app.request(`/api/projects/${slug}/issues`, { method: 'POST', ...json({ title, type: 'bug' }) })
+  app.request(`/api/projects/${slug}/issues`, {
+    method: 'POST',
+    ...json({ title, type: 'bug' })
+  })
 
 const setParent = async (slug: string, number: number, parentNumber: number) =>
   app.request(`/api/projects/${slug}/issues/${number}/parent`, {
     method: 'PUT',
-    ...json({ parentNumber }),
+    ...json({ parentNumber })
   })
 
 const clearParent = async (slug: string, number: number) =>
-  app.request(`/api/projects/${slug}/issues/${number}/parent`, { method: 'DELETE' })
+  app.request(`/api/projects/${slug}/issues/${number}/parent`, {
+    method: 'DELETE'
+  })
 
 const block = async (slug: string, number: number, blockerNumber: number) =>
-  app.request(`/api/projects/${slug}/issues/${number}/blocked-by/${blockerNumber}`, {
-    method: 'PUT',
-  })
+  app.request(
+    `/api/projects/${slug}/issues/${number}/blocked-by/${blockerNumber}`,
+    {
+      method: 'PUT'
+    }
+  )
 
 const unblock = async (slug: string, number: number, blockerNumber: number) =>
-  app.request(`/api/projects/${slug}/issues/${number}/blocked-by/${blockerNumber}`, {
-    method: 'DELETE',
-  })
+  app.request(
+    `/api/projects/${slug}/issues/${number}/blocked-by/${blockerNumber}`,
+    {
+      method: 'DELETE'
+    }
+  )
 
-const patchState = async (slug: string, number: number, state: 'open' | 'closed') =>
-  app.request(`/api/projects/${slug}/issues/${number}`, { method: 'PATCH', ...json({ state }) })
+const patchState = async (
+  slug: string,
+  number: number,
+  state: 'open' | 'closed'
+) =>
+  app.request(`/api/projects/${slug}/issues/${number}`, {
+    method: 'PATCH',
+    ...json({ state })
+  })
 
 const parseIssue = async (res: Response) => IssueSchema.parse(await res.json())
 
@@ -107,7 +124,10 @@ describe('parent tree', () => {
   test('deleting a parent orphans its children (parent_id set null)', async () => {
     await seed(2)
     await setParent('demo', 2, 1)
-    expect((await app.request('/api/projects/demo/issues/1', { method: 'DELETE' })).status).toBe(204)
+    expect(
+      (await app.request('/api/projects/demo/issues/1', { method: 'DELETE' }))
+        .status
+    ).toBe(204)
     expect((await getIssue('demo', 2)).parentId).toBeNull()
   })
 })
@@ -124,28 +144,43 @@ describe('blocking DAG and derived state', () => {
     const blocked = await parseIssue(await block('demo', 1, 2))
     expect(blocked).toMatchObject({ blocked: true, ready: false })
     // The blocker itself stays ready - it has no open blockers of its own.
-    expect(await getIssue('demo', 2)).toMatchObject({ blocked: false, ready: true })
+    expect(await getIssue('demo', 2)).toMatchObject({
+      blocked: false,
+      ready: true
+    })
   })
 
   test('closing every blocker makes the issue ready again', async () => {
     await seed(3)
     await block('demo', 1, 2)
     await block('demo', 1, 3)
-    expect(await getIssue('demo', 1)).toMatchObject({ blocked: true, ready: false })
+    expect(await getIssue('demo', 1)).toMatchObject({
+      blocked: true,
+      ready: false
+    })
 
     await patchState('demo', 2, 'closed')
     // One blocker still open -> still blocked.
-    expect(await getIssue('demo', 1)).toMatchObject({ blocked: true, ready: false })
+    expect(await getIssue('demo', 1)).toMatchObject({
+      blocked: true,
+      ready: false
+    })
 
     await patchState('demo', 3, 'closed')
-    expect(await getIssue('demo', 1)).toMatchObject({ blocked: false, ready: true })
+    expect(await getIssue('demo', 1)).toMatchObject({
+      blocked: false,
+      ready: true
+    })
   })
 
   test('a closed issue is neither blocked nor ready', async () => {
     await seed(2)
     await block('demo', 1, 2)
     await patchState('demo', 1, 'closed')
-    expect(await getIssue('demo', 1)).toMatchObject({ blocked: false, ready: false })
+    expect(await getIssue('demo', 1)).toMatchObject({
+      blocked: false,
+      ready: false
+    })
   })
 
   test('declaring the same edge twice is idempotent', async () => {
@@ -191,25 +226,38 @@ describe('blocking DAG and derived state', () => {
   test('deleting a blocker removes the edge (dependent becomes ready)', async () => {
     await seed(2)
     await block('demo', 1, 2)
-    expect((await app.request('/api/projects/demo/issues/2', { method: 'DELETE' })).status).toBe(204)
-    expect(await getIssue('demo', 1)).toMatchObject({ blocked: false, ready: true })
+    expect(
+      (await app.request('/api/projects/demo/issues/2', { method: 'DELETE' }))
+        .status
+    ).toBe(204)
+    expect(await getIssue('demo', 1)).toMatchObject({
+      blocked: false,
+      ready: true
+    })
   })
 
   test('edges cascade-delete with the project', async () => {
     await seed(2)
     await block('demo', 1, 2)
-    expect((await app.request('/api/projects/demo', { method: 'DELETE' })).status).toBe(204)
+    expect(
+      (await app.request('/api/projects/demo', { method: 'DELETE' })).status
+    ).toBe(204)
     // Recreate: numbering restarts and the fresh issue carries no stale edge.
     await createProject('DEMO')
     await createIssue('demo', 'Fresh')
-    expect(await getIssue('demo', 1)).toMatchObject({ blocked: false, ready: true })
+    expect(await getIssue('demo', 1)).toMatchObject({
+      blocked: false,
+      ready: true
+    })
   })
 })
 
 describe('per-project SSE emissions', () => {
   const openStream = async (slug: string) => {
     const controller = new AbortController()
-    const res = await app.request(`/api/projects/${slug}/events`, { signal: controller.signal })
+    const res = await app.request(`/api/projects/${slug}/events`, {
+      signal: controller.signal
+    })
     expect(res.status).toBe(200)
     return { events: readEvents(res), controller }
   }
@@ -228,7 +276,11 @@ describe('per-project SSE emissions', () => {
     const { events, controller } = await openStream('demo')
     await block('demo', 1, 2)
     const evt = await nextEventOfType(events, 'issue.changed')
-    expect(IssueSchema.parse(evt.data)).toMatchObject({ number: 1, blocked: true, ready: false })
+    expect(IssueSchema.parse(evt.data)).toMatchObject({
+      number: 1,
+      blocked: true,
+      ready: false
+    })
     controller.abort()
   })
 
@@ -259,9 +311,11 @@ describe('parent body validation', () => {
     await createIssue('demo', 'X')
     const res = await app.request('/api/projects/demo/issues/1/parent', {
       method: 'PUT',
-      ...json({}),
+      ...json({})
     })
     expect(res.status).toBe(400)
-    expect(z.object({ error: z.string() }).parse(await res.json()).error.length).toBeGreaterThan(0)
+    expect(
+      z.object({ error: z.string() }).parse(await res.json()).error.length
+    ).toBeGreaterThan(0)
   })
 })

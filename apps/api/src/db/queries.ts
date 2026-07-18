@@ -1,8 +1,15 @@
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm'
 import { z } from 'zod'
-
 import type { Db } from './client'
-import { boards, comments, issueBlockedBy, issueLabels, issues, labels, projects } from './schema'
+import {
+  boards,
+  comments,
+  issueBlockedBy,
+  issueLabels,
+  issues,
+  labels,
+  projects
+} from './schema'
 
 type ProjectRow = typeof projects.$inferSelect
 type IssueRow = typeof issues.$inferSelect
@@ -24,7 +31,10 @@ export const labelsForIssue = (db: Db, issueId: number): LabelSnapshot[] =>
 
 // slug = key.toLowerCase() is derived, never stored (#18). Shared by the project
 // routes (HTTP responses) and the SSE layer (entity-snapshot payloads).
-export const toProject = (row: ProjectRow) => ({ ...row, slug: row.key.toLowerCase() })
+export const toProject = (row: ProjectRow) => ({
+  ...row,
+  slug: row.key.toLowerCase()
+})
 
 export type ProjectSnapshot = ReturnType<typeof toProject>
 
@@ -37,14 +47,17 @@ export const findProjectBySlug = (db: Db, slug: string) =>
 
 // The states of an issue's blockers, powering the derived blocked/ready flags
 // (#30). Only the state matters, so we project it and skip the rest of the row.
-export const blockerStatesForIssue = (db: Db, issueId: number): IssueRow['state'][] =>
+export const blockerStatesForIssue = (
+  db: Db,
+  issueId: number
+): IssueRow['state'][] =>
   db
     .select({ state: issues.state })
     .from(issues)
     .innerJoin(issueBlockedBy, eq(issueBlockedBy.blockerId, issues.id))
     .where(eq(issueBlockedBy.issueId, issueId))
     .all()
-    .map((r) => r.state)
+    .map(r => r.state)
 
 // The issues blocked by a given issue - its dependents. When a blocker's state
 // flips, every dependent's derived blocked/ready changes, so the caller re-publishes
@@ -67,13 +80,15 @@ export const dependentsOf = (db: Db, blockerId: number): IssueRow[] =>
 // fine at this scale (single-process SQLite) - fold into a join if lists grow hot.
 export const toIssue = (db: Db, row: IssueRow, projectKey: string) => {
   const open = row.state === 'open'
-  const anyBlockerOpen = blockerStatesForIssue(db, row.id).some((state) => state === 'open')
+  const anyBlockerOpen = blockerStatesForIssue(db, row.id).some(
+    state => state === 'open'
+  )
   return {
     ...row,
     key: `${projectKey}-${row.number}`,
     labels: labelsForIssue(db, row.id),
     blocked: open && anyBlockerOpen,
-    ready: open && !anyBlockerOpen,
+    ready: open && !anyBlockerOpen
   }
 }
 
@@ -107,7 +122,7 @@ export type BoardSnapshot = Omit<typeof boards.$inferSelect, 'columnAxis'> & {
 
 export const toBoard = (row: typeof boards.$inferSelect): BoardSnapshot => ({
   ...row,
-  columnAxis: ColumnAxisSchema.parse(JSON.parse(row.columnAxis)),
+  columnAxis: ColumnAxisSchema.parse(JSON.parse(row.columnAxis))
 })
 
 // A project has exactly one board (unique project_id), auto-created with the

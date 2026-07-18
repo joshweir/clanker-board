@@ -1,11 +1,14 @@
-import { createRootRouteWithContext, createRoute, createRouter, Outlet } from '@tanstack/react-router'
+import {
+  createRootRouteWithContext,
+  createRoute,
+  createRouter,
+  Outlet
+} from '@tanstack/react-router'
 import { z } from 'zod'
-
-import { filterFields } from './filters'
 import type { ApiClient } from './api'
+import { filterFields } from './filters'
 import { ProjectBoard } from './routes/project-board'
 import { ProjectIssues } from './routes/project-issues'
-import { ProjectSearch } from './routes/project-search'
 import { ProjectsList } from './routes/projects-list'
 
 // Both project tabs share the filter axes (#38) and add one view control of their
@@ -13,10 +16,13 @@ import { ProjectsList } from './routes/projects-list'
 // per-viewer. Each view control is optional (absent = its default), keeping an
 // unfiltered/default URL empty. Board: "Hide Done" (Done hidden by default) - view
 // structure, not a filter axis. Issues list: Open/Closed/All state (default Open).
-const boardSearchSchema = z.object({ ...filterFields, hideDone: z.boolean().optional().catch(undefined) })
+const boardSearchSchema = z.object({
+  ...filterFields,
+  hideDone: z.boolean().optional().catch(undefined)
+})
 const issuesSearchSchema = z.object({
   ...filterFields,
-  state: z.enum(['open', 'closed', 'all']).optional().catch(undefined),
+  state: z.enum(['open', 'closed', 'all']).optional().catch(undefined)
 })
 
 // The client lives in router context so loaders fetch through it and tests can
@@ -29,14 +35,15 @@ export interface RouterContext {
 }
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  component: () => <Outlet />,
+  component: () => <Outlet />
 })
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  loader: async ({ context }) => (await context.client.api.projects.$get()).json(),
-  component: ProjectsList,
+  loader: async ({ context }) =>
+    (await context.client.api.projects.$get()).json(),
+  component: ProjectsList
 })
 
 const projectRoute = createRoute({
@@ -53,7 +60,7 @@ const projectRoute = createRoute({
       context.client.api.projects[':slug'].board.$get({ param }),
       context.client.api.projects[':slug'].labels.$get({ param }),
       context.client.api.projects[':slug'].issues.$get({ param }),
-      context.client.api.actors.$get(),
+      context.client.api.actors.$get()
     ])
     const board = await boardRes.json()
     const labels = await labelsRes.json()
@@ -69,7 +76,7 @@ const projectRoute = createRoute({
     }
     return { board, labels, issues, actors }
   },
-  component: ProjectBoard,
+  component: ProjectBoard
 })
 
 const projectIssuesRoute = createRoute({
@@ -85,7 +92,7 @@ const projectIssuesRoute = createRoute({
     const [issuesRes, labelsRes, actorsRes] = await Promise.all([
       context.client.api.projects[':slug'].issues.$get({ param }),
       context.client.api.projects[':slug'].labels.$get({ param }),
-      context.client.api.actors.$get(),
+      context.client.api.actors.$get()
     ])
     const issues = await issuesRes.json()
     const labels = await labelsRes.json()
@@ -97,38 +104,13 @@ const projectIssuesRoute = createRoute({
     }
     return { issues, labels, actors }
   },
-  component: ProjectIssues,
-})
-
-// Full-text search over a project's issues + comments (#39). Its q lives in the URL
-// (shareable, like the filter axes) and its loader seeds only what the shared detail
-// modal needs - the project's labels (chip picker) and issues (parent/blocker pickers);
-// the ranked results themselves are fetched live from the search endpoint per query.
-const projectSearchRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/projects/$slug/search',
-  validateSearch: z.object({ q: z.string().optional().catch(undefined) }),
-  loader: async ({ context, params }) => {
-    const param = { slug: params.slug }
-    const [labelsRes, issuesRes] = await Promise.all([
-      context.client.api.projects[':slug'].labels.$get({ param }),
-      context.client.api.projects[':slug'].issues.$get({ param }),
-    ])
-    const labels = await labelsRes.json()
-    const issues = await issuesRes.json()
-    if (!Array.isArray(labels) || !Array.isArray(issues)) {
-      throw new Error('Project not found')
-    }
-    return { labels, issues }
-  },
-  component: ProjectSearch,
+  component: ProjectIssues
 })
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   projectRoute,
-  projectIssuesRoute,
-  projectSearchRoute,
+  projectIssuesRoute
 ])
 
 export function createAppRouter(client: ApiClient, fetchImpl: typeof fetch) {

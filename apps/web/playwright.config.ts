@@ -1,7 +1,6 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { defineConfig, devices } from '@playwright/test'
 
 // The E2E harness (#41): a REAL browser against the REAL app - the api serving the
@@ -34,7 +33,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    trace: 'on-first-retry'
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
@@ -45,6 +44,6 @@ export default defineConfig({
     url: BASE_URL,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
-    env: { PORT: String(PORT), DATABASE_PATH: DB_PATH },
-  },
+    env: { PORT: String(PORT), DATABASE_PATH: DB_PATH }
+  }
 })

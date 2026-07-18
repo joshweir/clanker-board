@@ -1,4 +1,9 @@
-import { createElement, Fragment, type ReactElement, type ReactNode } from 'react'
+import {
+  createElement,
+  Fragment,
+  type ReactElement,
+  type ReactNode
+} from 'react'
 
 // Minimal, safe markdown -> React renderer (#36). It renders to React nodes and
 // never uses dangerouslySetInnerHTML, so there is no HTML-injection surface: a
@@ -16,7 +21,8 @@ function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = []
   let rest = text
   let key = 0
-  const push = (node: ReactNode) => nodes.push(<Fragment key={key++}>{node}</Fragment>)
+  const push = (node: ReactNode) =>
+    nodes.push(<Fragment key={key++}>{node}</Fragment>)
   while (rest.length > 0) {
     const link = /^\[([^\]]+)\]\(([^)\s]+)\)/.exec(rest)
     const code = /^`([^`]+)`/.exec(rest)
@@ -53,10 +59,17 @@ function renderBlock(block: string, key: number): ReactElement | null {
     return null
   }
   // Fenced code block: ``` ... ``` with an optional language tag on the first line.
-  if (trimmed.startsWith('```') && trimmed.endsWith('```') && trimmed.length >= 6) {
+  if (
+    trimmed.startsWith('```') &&
+    trimmed.endsWith('```') &&
+    trimmed.length >= 6
+  ) {
     const inner = trimmed.slice(3, -3).replace(/^\n/, '').replace(/\n$/, '')
     const lines = inner.split('\n')
-    const code = lines.length > 1 && /^[a-zA-Z0-9]*$/.test(lines[0] ?? '') ? lines.slice(1).join('\n') : inner
+    const code =
+      lines.length > 1 && /^[a-zA-Z0-9]*$/.test(lines[0] ?? '')
+        ? lines.slice(1).join('\n')
+        : inner
     return (
       <pre key={key}>
         <code>{code}</code>
@@ -68,11 +81,15 @@ function renderBlock(block: string, key: number): ReactElement | null {
   const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed)
   if (heading && !trimmed.includes('\n')) {
     const [, hashes = '', text = ''] = heading
-    return createElement(`h${hashes.length}`, { key, className: 'md-heading' }, renderInline(text))
+    return createElement(
+      `h${hashes.length}`,
+      { key, className: 'md-heading' },
+      renderInline(text)
+    )
   }
   // Unordered list: every line is a `- ` / `* ` bullet.
   const lines = trimmed.split('\n')
-  if (lines.every((line) => /^[-*]\s+/.test(line))) {
+  if (lines.every(line => /^[-*]\s+/.test(line))) {
     return (
       <ul key={key}>
         {lines.map((line, i) => (
@@ -98,5 +115,9 @@ function renderBlock(block: string, key: number): ReactElement | null {
 // independently so redraw stays simple.
 export function Markdown({ source }: { source: string }): ReactElement {
   const blocks = source.split(/\n{2,}/)
-  return <div className="markdown">{blocks.map((block, i) => renderBlock(block, i))}</div>
+  return (
+    <div className="markdown">
+      {blocks.map((block, i) => renderBlock(block, i))}
+    </div>
+  )
 }

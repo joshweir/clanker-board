@@ -36,6 +36,16 @@ body {
   overflow-x: auto;
 }
 
+/* The reorderable axis columns live in their own flex track (the column Droppable);
+   the virtual columns sit beside it in .board-columns. Same gap so the row reads as
+   one continuous set of columns. */
+.board-axis-columns {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  flex: 0 0 auto;
+}
+
 .board-column-draggable {
   flex: 0 0 16rem;
 }
@@ -644,20 +654,86 @@ button.danger {
 .issues-table .label-chip {
   padding: 0.1rem 0.45rem;
   font-size: 0.75rem;
+  /* Keep each chip's text on one line; the chips row wraps between chips instead
+     of a single label breaking mid-word (e.g. "In Progress"). */
+  white-space: nowrap;
 }
 
-/* Full-text search view (#39): a query box, a jump-to-issue row, and ranked results
-   grouped one per issue with a matched-field badge and a highlighted snippet. */
-.search {
-  padding: 1rem 1.5rem;
+/* Give the Labels column room so chips aren't crushed by the title column's 100%. */
+.issues-table th:last-child,
+.issues-table td:last-child {
+  min-width: 11rem;
 }
 
-.search-box {
-  margin: 1rem 0;
+/* Inline, Jira-style search (#39, replaces the dedicated Search view): a field with a
+   magnifying glass in the header, its ranked results dropping down beneath it. Results
+   themselves reuse the jump row / result / snippet styles below. */
+.search-box-inline {
+  position: relative;
+  align-self: center;
 }
 
-.search-box input {
-  width: 100%;
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: Canvas;
+}
+
+.search-field:focus-within {
+  outline: 2px solid Highlight;
+  outline-offset: 1px;
+}
+
+.search-icon {
+  opacity: 0.6;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.search-field input {
+  font: inherit;
+  border: none;
+  background: transparent;
+  color: CanvasText;
+  padding: 0;
+  width: 12rem;
+}
+
+.search-field input:focus {
+  outline: none;
+}
+
+/* Suppress the native search clear so only our own X (with clear-everything semantics) shows. */
+.search-field input[type='search']::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-clear {
+  padding: 0 0.35rem;
+  border: none;
+  background: transparent;
+  line-height: 1;
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
+.search-dropdown {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: calc(100% + 0.35rem);
+  z-index: 20;
+  width: min(28rem, 90vw);
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  background: Canvas;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
 }
 
 .search-jump {

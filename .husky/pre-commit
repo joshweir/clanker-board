@@ -1,0 +1,5 @@
+#!/bin/bash
+# Format staged files before commit (per-file, via lint-staged) so formatting
+# stays clean without repo-wide reformat churn. The full lint/build/test gate
+# runs on pre-push (check-all).
+pnpm exec lint-staged

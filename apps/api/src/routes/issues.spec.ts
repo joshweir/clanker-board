@@ -1,6 +1,5 @@
 import { z } from '@hono/zod-openapi'
 import { beforeEach, describe, expect, test } from 'vitest'
-
 import { createApp } from '../app'
 import { createDb } from '../db/client'
 import { nextEventOfType, readEvents } from '../test/sse'
@@ -18,7 +17,7 @@ beforeEach(() => {
 
 const json = (body: unknown) => ({
   headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(body),
+  body: JSON.stringify(body)
 })
 
 const createProject = async (key: string, name = key) =>
@@ -28,11 +27,16 @@ const createIssue = async (slug: string, body: unknown) =>
   app.request(`/api/projects/${slug}/issues`, { method: 'POST', ...json(body) })
 
 const patchIssue = async (slug: string, number: number, body: unknown) =>
-  app.request(`/api/projects/${slug}/issues/${number}`, { method: 'PATCH', ...json(body) })
+  app.request(`/api/projects/${slug}/issues/${number}`, {
+    method: 'PATCH',
+    ...json(body)
+  })
 
 const parseIssue = async (res: Response) => IssueSchema.parse(await res.json())
 const listIssues = async (slug: string) =>
-  z.array(IssueSchema).parse(await (await app.request(`/api/projects/${slug}/issues`)).json())
+  z
+    .array(IssueSchema)
+    .parse(await (await app.request(`/api/projects/${slug}/issues`)).json())
 
 const seedProject = async (key: string) => {
   await createProject(key)
@@ -52,13 +56,15 @@ describe('POST /api/projects/:slug/issues', () => {
       state: 'open',
       number: 1,
       key: 'DEMO-1',
-      assigneeId: null,
+      assigneeId: null
     })
     expect(issue.rank.length).toBeGreaterThan(0)
   })
 
   test('accepts an optional markdown body', async () => {
-    const issue = await parseIssue(await createIssue('demo', { title: 'X', type: 'bug', body: '# H' }))
+    const issue = await parseIssue(
+      await createIssue('demo', { title: 'X', type: 'bug', body: '# H' })
+    )
     expect(issue.body).toBe('# H')
   })
 
@@ -66,13 +72,15 @@ describe('POST /api/projects/:slug/issues', () => {
     ['missing title', { type: 'bug' }],
     ['empty title', { title: '', type: 'bug' }],
     ['missing type', { title: 'X' }],
-    ['empty type', { title: 'X', type: '' }],
+    ['empty type', { title: 'X', type: '' }]
   ])('rejects %s with 400', async (_label, body) => {
     expect((await createIssue('demo', body)).status).toBe(400)
   })
 
   test('404s for an unknown project', async () => {
-    expect((await createIssue('nope', { title: 'X', type: 'bug' })).status).toBe(404)
+    expect(
+      (await createIssue('nope', { title: 'X', type: 'bug' })).status
+    ).toBe(404)
   })
 })
 
@@ -80,7 +88,9 @@ describe('per-project numbering', () => {
   test('is sequential within a project', async () => {
     await seedProject('DEMO')
     for (const expected of [1, 2, 3]) {
-      const issue = await parseIssue(await createIssue('demo', { title: `#${expected}`, type: 'x' }))
+      const issue = await parseIssue(
+        await createIssue('demo', { title: `#${expected}`, type: 'x' })
+      )
       expect(issue.number).toBe(expected)
     }
   })
@@ -88,8 +98,12 @@ describe('per-project numbering', () => {
   test('is independent per project (both start at 1)', async () => {
     await seedProject('AAA')
     await seedProject('BBB')
-    const a = await parseIssue(await createIssue('aaa', { title: 'a', type: 'x' }))
-    const b = await parseIssue(await createIssue('bbb', { title: 'b', type: 'x' }))
+    const a = await parseIssue(
+      await createIssue('aaa', { title: 'a', type: 'x' })
+    )
+    const b = await parseIssue(
+      await createIssue('bbb', { title: 'b', type: 'x' })
+    )
     expect(a).toMatchObject({ number: 1, key: 'AAA-1' })
     expect(b).toMatchObject({ number: 1, key: 'BBB-1' })
   })
@@ -97,18 +111,29 @@ describe('per-project numbering', () => {
   test('assigns distinct sequential numbers under concurrent creates', async () => {
     await seedProject('DEMO')
     const results = await Promise.all(
-      Array.from({ length: 10 }, async (_, i) => createIssue('demo', { title: `#${i}`, type: 'x' })),
+      Array.from({ length: 10 }, async (_, i) =>
+        createIssue('demo', { title: `#${i}`, type: 'x' })
+      )
     )
-    const numbers = await Promise.all(results.map(async (res) => (await parseIssue(res)).number))
-    expect([...numbers].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    const numbers = await Promise.all(
+      results.map(async res => (await parseIssue(res)).number)
+    )
+    expect([...numbers].sort((a, b) => a - b)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+    ])
   })
 
   test('does not reuse a number after a delete (stable handles)', async () => {
     await seedProject('DEMO')
     await createIssue('demo', { title: 'one', type: 'x' })
     await createIssue('demo', { title: 'two', type: 'x' })
-    expect((await app.request('/api/projects/demo/issues/1', { method: 'DELETE' })).status).toBe(204)
-    const three = await parseIssue(await createIssue('demo', { title: 'three', type: 'x' }))
+    expect(
+      (await app.request('/api/projects/demo/issues/1', { method: 'DELETE' }))
+        .status
+    ).toBe(204)
+    const three = await parseIssue(
+      await createIssue('demo', { title: 'three', type: 'x' })
+    )
     expect(three.number).toBe(3)
   })
 })
@@ -118,7 +143,9 @@ describe('GET /api/projects/:slug/issues/:number', () => {
 
   test('fetches an issue by its per-project number', async () => {
     await createIssue('demo', { title: 'First', type: 'bug' })
-    const issue = await parseIssue(await app.request('/api/projects/demo/issues/1'))
+    const issue = await parseIssue(
+      await app.request('/api/projects/demo/issues/1')
+    )
     expect(issue).toMatchObject({ number: 1, title: 'First', key: 'DEMO-1' })
   })
 
@@ -137,19 +164,37 @@ describe('PATCH /api/projects/:slug/issues/:number', () => {
   test('updates only the provided fields', async () => {
     await createIssue('demo', { title: 'Old', type: 'bug', body: 'keep' })
     const patched = await parseIssue(
-      await patchIssue('demo', 1, { title: 'New', state: 'closed', type: 'chore' }),
+      await patchIssue('demo', 1, {
+        title: 'New',
+        state: 'closed',
+        type: 'chore'
+      })
     )
-    expect(patched).toMatchObject({ title: 'New', state: 'closed', type: 'chore', body: 'keep' })
+    expect(patched).toMatchObject({
+      title: 'New',
+      state: 'closed',
+      type: 'chore',
+      body: 'keep'
+    })
   })
 
   test('assigns and unassigns an actor', async () => {
     const actor = ActorSchema.parse(
-      await (await app.request('/api/actors', { method: 'POST', ...json({ name: 'Ada', kind: 'human' }) })).json(),
+      await (
+        await app.request('/api/actors', {
+          method: 'POST',
+          ...json({ name: 'Ada', kind: 'human' })
+        })
+      ).json()
     )
     await createIssue('demo', { title: 'X', type: 'bug' })
-    const assigned = await parseIssue(await patchIssue('demo', 1, { assigneeId: actor.id }))
+    const assigned = await parseIssue(
+      await patchIssue('demo', 1, { assigneeId: actor.id })
+    )
     expect(assigned.assigneeId).toBe(actor.id)
-    const unassigned = await parseIssue(await patchIssue('demo', 1, { assigneeId: null }))
+    const unassigned = await parseIssue(
+      await patchIssue('demo', 1, { assigneeId: null })
+    )
     expect(unassigned.assigneeId).toBeNull()
   })
 
@@ -176,7 +221,11 @@ describe('rank ordering', () => {
     for (const t of ['a', 'b', 'c']) {
       await createIssue('demo', { title: t, type: 'x' })
     }
-    expect((await listIssues('demo')).map((i) => i.title)).toEqual(['a', 'b', 'c'])
+    expect((await listIssues('demo')).map(i => i.title)).toEqual([
+      'a',
+      'b',
+      'c'
+    ])
   })
 
   test('reorders when a rank is patched', async () => {
@@ -190,7 +239,11 @@ describe('rank ordering', () => {
     }
     // Move 'a' after 'c' by giving it a rank that sorts last.
     await patchIssue('demo', first.number, { rank: 'zzzz' })
-    expect((await listIssues('demo')).map((i) => i.title)).toEqual(['b', 'c', 'a'])
+    expect((await listIssues('demo')).map(i => i.title)).toEqual([
+      'b',
+      'c',
+      'a'
+    ])
   })
 })
 
@@ -201,14 +254,18 @@ describe('cascade delete', () => {
     await createIssue('demo', { title: 'gone', type: 'x' })
     await createIssue('keep', { title: 'stays', type: 'x' })
 
-    expect((await app.request('/api/projects/demo', { method: 'DELETE' })).status).toBe(204)
+    expect(
+      (await app.request('/api/projects/demo', { method: 'DELETE' })).status
+    ).toBe(204)
 
     // Recreating the project shows numbering restarts (its issues were removed).
     await createProject('DEMO')
     expect(await listIssues('demo')).toEqual([])
-    const fresh = await parseIssue(await createIssue('demo', { title: 'new', type: 'x' }))
+    const fresh = await parseIssue(
+      await createIssue('demo', { title: 'new', type: 'x' })
+    )
     expect(fresh.number).toBe(1)
-    expect((await listIssues('keep')).map((i) => i.title)).toEqual(['stays'])
+    expect((await listIssues('keep')).map(i => i.title)).toEqual(['stays'])
   })
 })
 
@@ -217,12 +274,18 @@ describe('DELETE /api/projects/:slug/issues/:number', () => {
 
   test('deletes an issue', async () => {
     await createIssue('demo', { title: 'X', type: 'bug' })
-    expect((await app.request('/api/projects/demo/issues/1', { method: 'DELETE' })).status).toBe(204)
+    expect(
+      (await app.request('/api/projects/demo/issues/1', { method: 'DELETE' }))
+        .status
+    ).toBe(204)
     expect((await app.request('/api/projects/demo/issues/1')).status).toBe(404)
   })
 
   test('404s for an unknown issue', async () => {
-    expect((await app.request('/api/projects/demo/issues/99', { method: 'DELETE' })).status).toBe(404)
+    expect(
+      (await app.request('/api/projects/demo/issues/99', { method: 'DELETE' }))
+        .status
+    ).toBe(404)
   })
 })
 
@@ -230,7 +293,9 @@ describe('per-project SSE emissions', () => {
   test('emits issue.changed with the snapshot on create', async () => {
     await seedProject('DEMO')
     const controller = new AbortController()
-    const res = await app.request('/api/projects/demo/events', { signal: controller.signal })
+    const res = await app.request('/api/projects/demo/events', {
+      signal: controller.signal
+    })
     expect(res.status).toBe(200)
     const events = readEvents(res)
 
@@ -246,7 +311,9 @@ describe('per-project SSE emissions', () => {
     await createIssue('demo', { title: 'Old', type: 'bug' })
     const controller = new AbortController()
     const events = readEvents(
-      await app.request('/api/projects/demo/events', { signal: controller.signal }),
+      await app.request('/api/projects/demo/events', {
+        signal: controller.signal
+      })
     )
 
     await patchIssue('demo', 1, { title: 'New' })
@@ -261,7 +328,9 @@ describe('per-project SSE emissions', () => {
     await createIssue('demo', { title: 'Doomed', type: 'bug' })
     const controller = new AbortController()
     const events = readEvents(
-      await app.request('/api/projects/demo/events', { signal: controller.signal }),
+      await app.request('/api/projects/demo/events', {
+        signal: controller.signal
+      })
     )
 
     await app.request('/api/projects/demo/issues/1', { method: 'DELETE' })

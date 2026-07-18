@@ -1,6 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { Scalar } from '@scalar/hono-api-reference'
-
 import type { Db } from './db/client'
 import { createEventBus } from './events/bus'
 import { actorsRouter } from './routes/actors'
@@ -28,8 +27,8 @@ export function createApp(db: Db) {
       version: '0.1.0',
       description:
         'Multi-project issue tracker. Every capability is a documented HTTP route; ' +
-        'interactive docs at /docs.',
-    },
+        'interactive docs at /docs.'
+    }
   })
 
   return app

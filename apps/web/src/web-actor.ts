@@ -10,12 +10,14 @@ const WEB_ACTOR_NAME = 'Web'
 
 export async function ensureWebActor(client: ApiClient): Promise<number> {
   const existing = await (await client.api.actors.$get()).json()
-  const found = existing.find((actor) => actor.name === WEB_ACTOR_NAME)
+  const found = existing.find(actor => actor.name === WEB_ACTOR_NAME)
   if (found) {
     return found.id
   }
   const created = await (
-    await client.api.actors.$post({ json: { name: WEB_ACTOR_NAME, kind: 'human' } })
+    await client.api.actors.$post({
+      json: { name: WEB_ACTOR_NAME, kind: 'human' }
+    })
   ).json()
   if (!('id' in created)) {
     throw new Error('could not create the web actor')

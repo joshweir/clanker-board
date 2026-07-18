@@ -1,17 +1,19 @@
 import { screen, within } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
-
 import type { ApiClient } from '../api'
 import { renderApp } from '../test/harness'
 
-const seedProject = (name: string, key: string) => async (client: ApiClient) => {
-  await client.api.projects.$post({ json: { name, key } })
-}
+const seedProject =
+  (name: string, key: string) => async (client: ApiClient) => {
+    await client.api.projects.$post({ json: { name, key } })
+  }
 
 describe('project list', () => {
   test('a fresh instance invites you to create your first project', async () => {
     await renderApp()
-    expect(await screen.findByRole('button', { name: 'Create your first project' })).toBeDefined()
+    expect(
+      await screen.findByRole('button', { name: 'Create your first project' })
+    ).toBeDefined()
   })
 
   test('lists projects that already exist', async () => {
@@ -24,7 +26,9 @@ describe('project list', () => {
 describe('create project', () => {
   test('auto-suggests an editable key from the name and creates the project', async () => {
     const { user } = await renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Create your first project' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Create your first project' })
+    )
 
     await user.type(screen.getByLabelText('Name'), 'Demo')
     const keyInput = screen.getByLabelText<HTMLInputElement>('Key')
@@ -38,7 +42,9 @@ describe('create project', () => {
 
   test('the suggested key stays editable', async () => {
     const { user, client } = await renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Create your first project' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Create your first project' })
+    )
     await user.type(screen.getByLabelText('Name'), 'Demo')
     const keyInput = screen.getByLabelText<HTMLInputElement>('Key')
     await user.clear(keyInput)
@@ -49,12 +55,14 @@ describe('create project', () => {
     await screen.findByRole('link', { name: /CUSTOMKEY/ })
 
     const list = await client.api.projects.$get()
-    expect((await list.json()).map((p) => p.key)).toEqual(['CUSTOMKEY'])
+    expect((await list.json()).map(p => p.key)).toEqual(['CUSTOMKEY'])
   })
 
   test('surfaces a shape error for an invalid key', async () => {
     const { user } = await renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Create your first project' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Create your first project' })
+    )
     await user.type(screen.getByLabelText('Name'), 'Demo')
     const keyInput = screen.getByLabelText('Key')
     await user.clear(keyInput)
@@ -82,7 +90,9 @@ describe('delete project', () => {
   test('requires typing the key to confirm, then removes the project', async () => {
     const { user } = await renderApp(seedProject('Doomed', 'DOOM'))
 
-    await user.click(await screen.findByRole('button', { name: 'Delete Doomed' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete Doomed' })
+    )
 
     const deleteButton = screen.getByRole('button', { name: 'Delete project' })
     expect(deleteButton).toHaveProperty('disabled', true)
@@ -97,7 +107,9 @@ describe('delete project', () => {
 
     await user.click(deleteButton)
 
-    expect(await screen.findByRole('button', { name: 'Create your first project' })).toBeDefined()
+    expect(
+      await screen.findByRole('button', { name: 'Create your first project' })
+    ).toBeDefined()
   })
 })
 
@@ -107,7 +119,9 @@ describe('live updates', () => {
   // no reload (#27).
   test('a project created elsewhere appears with no reload', async () => {
     const { client } = await renderApp()
-    expect(await screen.findByRole('button', { name: 'Create your first project' })).toBeDefined()
+    expect(
+      await screen.findByRole('button', { name: 'Create your first project' })
+    ).toBeDefined()
 
     await client.api.projects.$post({ json: { name: 'Remote', key: 'REMOTE' } })
 
@@ -121,7 +135,7 @@ describe('live updates', () => {
 
     await client.api.projects[':slug'].$patch({
       param: { slug: 'proj' },
-      json: { name: 'New Name' },
+      json: { name: 'New Name' }
     })
 
     expect(await screen.findByText('New Name')).toBeDefined()
@@ -134,7 +148,9 @@ describe('live updates', () => {
 
     await client.api.projects[':slug'].$delete({ param: { slug: 'doom' } })
 
-    expect(await screen.findByRole('button', { name: 'Create your first project' })).toBeDefined()
+    expect(
+      await screen.findByRole('button', { name: 'Create your first project' })
+    ).toBeDefined()
   })
 })
 
@@ -146,7 +162,9 @@ describe('navigation', () => {
 
     // "No status" always renders (Done is hidden by default, #38); its presence
     // proves we landed on the board.
-    expect(await screen.findByRole('region', { name: 'No status' })).toBeDefined()
+    expect(
+      await screen.findByRole('region', { name: 'No status' })
+    ).toBeDefined()
     expect(screen.getByRole('heading', { name: 'demo' })).toBeDefined()
   })
 })

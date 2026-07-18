@@ -1,6 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
-
 import type { ApiClient } from '../api'
 import { renderApp } from '../test/harness'
 
@@ -13,22 +12,42 @@ const slug = 'demo'
 const param = { slug }
 
 function expectId(body: unknown): number {
-  if (typeof body === 'object' && body !== null && 'id' in body && typeof body.id === 'number') {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'id' in body &&
+    typeof body.id === 'number'
+  ) {
     return body.id
   }
   throw new Error(`expected an entity with an id, got ${JSON.stringify(body)}`)
 }
 
 async function createLabel(client: ApiClient, name: string): Promise<number> {
-  return expectId(await (await client.api.projects[':slug'].labels.$post({ param, json: { name } })).json())
+  return expectId(
+    await (
+      await client.api.projects[':slug'].labels.$post({ param, json: { name } })
+    ).json()
+  )
 }
 
 async function createActor(client: ApiClient, name: string): Promise<number> {
-  return expectId(await (await client.api.actors.$post({ json: { name, kind: 'human' } })).json())
+  return expectId(
+    await (
+      await client.api.actors.$post({ json: { name, kind: 'human' } })
+    ).json()
+  )
 }
 
-async function createIssue(client: ApiClient, title: string, type: string): Promise<number> {
-  const res = await client.api.projects[':slug'].issues.$post({ param, json: { title, type } })
+async function createIssue(
+  client: ApiClient,
+  title: string,
+  type: string
+): Promise<number> {
+  const res = await client.api.projects[':slug'].issues.$post({
+    param,
+    json: { title, type }
+  })
   const body = await res.json()
   if (!('number' in body)) {
     throw new Error(`expected a created issue, got ${JSON.stringify(body)}`)
@@ -36,29 +55,47 @@ async function createIssue(client: ApiClient, title: string, type: string): Prom
   return body.number
 }
 
-async function attachLabel(client: ApiClient, number: number, labelId: number): Promise<void> {
+async function attachLabel(
+  client: ApiClient,
+  number: number,
+  labelId: number
+): Promise<void> {
   await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
-    param: { slug, number: String(number), labelId: String(labelId) },
+    param: { slug, number: String(number), labelId: String(labelId) }
   })
 }
 
-async function assign(client: ApiClient, number: number, assigneeId: number): Promise<void> {
+async function assign(
+  client: ApiClient,
+  number: number,
+  assigneeId: number
+): Promise<void> {
   await client.api.projects[':slug'].issues[':number'].$patch({
     param: { slug, number: String(number) },
-    json: { assigneeId },
+    json: { assigneeId }
   })
 }
 
 async function close(client: ApiClient, number: number): Promise<void> {
   await client.api.projects[':slug'].issues[':number'].$patch({
     param: { slug, number: String(number) },
-    json: { state: 'closed' },
+    json: { state: 'closed' }
   })
 }
 
-async function block(client: ApiClient, number: number, blockerNumber: number): Promise<void> {
-  await client.api.projects[':slug'].issues[':number']['blocked-by'][':blockerNumber'].$put({
-    param: { slug, number: String(number), blockerNumber: String(blockerNumber) },
+async function block(
+  client: ApiClient,
+  number: number,
+  blockerNumber: number
+): Promise<void> {
+  await client.api.projects[':slug'].issues[':number']['blocked-by'][
+    ':blockerNumber'
+  ].$put({
+    param: {
+      slug,
+      number: String(number),
+      blockerNumber: String(blockerNumber)
+    }
   })
 }
 
@@ -86,19 +123,30 @@ async function seed(client: ApiClient) {
   const shipped = await createIssue(client, 'Shipped work', 'task')
   await close(client, shipped)
 
-  await client.api.projects[':slug'].board.$patch({ param, json: { columnAxis: [todo, doing] } })
+  await client.api.projects[':slug'].board.$patch({
+    param,
+    json: { columnAxis: [todo, doing] }
+  })
 }
 
 async function openBoard(navigateSearch: Record<string, unknown> = {}) {
   const { router, user } = await renderApp(seed)
-  await router.navigate({ to: '/projects/$slug', params: { slug }, search: navigateSearch })
+  await router.navigate({
+    to: '/projects/$slug',
+    params: { slug },
+    search: navigateSearch
+  })
   await screen.findByText('Bug for Ada')
   return { router, user }
 }
 
 async function openIssues(navigateSearch: Record<string, unknown> = {}) {
   const { router, user } = await renderApp(seed)
-  await router.navigate({ to: '/projects/$slug/issues', params: { slug }, search: navigateSearch })
+  await router.navigate({
+    to: '/projects/$slug/issues',
+    params: { slug },
+    search: navigateSearch
+  })
   await screen.findByText('Bug for Ada')
   return { router, user }
 }
@@ -108,7 +156,9 @@ const column = (name: string) => screen.getByRole('region', { name })
 describe('board filter bar', () => {
   test('Done is hidden by default; the axis columns always render', async () => {
     await openBoard()
-    const regions = screen.getAllByRole('region').map((el) => el.getAttribute('aria-label'))
+    const regions = screen
+      .getAllByRole('region')
+      .map(el => el.getAttribute('aria-label'))
     expect(regions).toEqual(['To Do', 'Doing', 'No status'])
     // The closed card is not on the board by default.
     expect(screen.queryByText('Shipped work')).toBeNull()
@@ -148,7 +198,10 @@ describe('board filter bar', () => {
 
   test('the assignee filter narrows to a single actor', async () => {
     const { user } = await openBoard()
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Assignee' }), 'Ada')
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Assignee' }),
+      'Ada'
+    )
 
     expect(screen.getByText('Bug for Ada')).toBeDefined()
     await waitFor(() => expect(screen.queryByText('Task for Bob')).toBeNull())
@@ -165,9 +218,13 @@ describe('board filter bar', () => {
     // an inactive axis is omitted entirely so the URL stays clean.
     expect(router.state.location.searchStr).toContain('bug')
     await user.click(screen.getByRole('checkbox', { name: 'bug' })) // clear it
-    await waitFor(() => expect(router.state.location.searchStr).not.toContain('type'))
+    await waitFor(() =>
+      expect(router.state.location.searchStr).not.toContain('type')
+    )
     await user.click(screen.getByRole('checkbox', { name: 'Blocked' }))
-    await waitFor(() => expect(router.state.location.searchStr).toContain('blocked'))
+    await waitFor(() =>
+      expect(router.state.location.searchStr).toContain('blocked')
+    )
   })
 
   test('Clear all appears only when a filter is active and resets the axes, not Hide Done', async () => {

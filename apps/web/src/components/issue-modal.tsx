@@ -5,21 +5,20 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type ReactNode,
+  type ReactNode
 } from 'react'
-
-import { Markdown } from './markdown'
-import { useModalDialog } from './modal'
+import type { Actor, ApiClient, Comment, Issue, Label } from '../api'
 import { subscribeToProjectEvents } from '../project-events'
 import { upsertById } from '../upsert'
 import { ensureWebActor } from '../web-actor'
-import type { ApiClient, Actor, Comment, Issue, Label } from '../api'
+import { Markdown } from './markdown'
+import { useModalDialog } from './modal'
 
-// The two text fields that autosave on blur are the only ones that can be "dirty":
+// The free-text fields that autosave on blur are the only ones that can be "dirty":
 // selects/label chips write immediately on change, so a remote change to them just
-// upserts. Title/body are held while focused so an incoming issue.changed cannot
+// upserts. Title/body/type are held while focused so an incoming issue.changed cannot
 // clobber what the user is typing (#36).
-type DirtyField = 'title' | 'body'
+type DirtyField = 'title' | 'body' | 'type'
 type BodyMode = 'edit' | 'preview'
 
 // A shared body editor with an Edit|Preview markdown toggle (#36). Preview renders
@@ -31,7 +30,7 @@ function BodyEditor({
   onChange,
   onFocus,
   onBlur,
-  hint,
+  hint
 }: {
   value: string
   mode: BodyMode
@@ -43,7 +42,11 @@ function BodyEditor({
 }) {
   return (
     <div className="body-editor">
-      <div className="body-editor-tabs" role="tablist" aria-label="Body editor mode">
+      <div
+        className="body-editor-tabs"
+        role="tablist"
+        aria-label="Body editor mode"
+      >
         <button
           type="button"
           role="tab"
@@ -66,14 +69,18 @@ function BodyEditor({
           className="body-textarea"
           aria-label="Body"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value)}
           onFocus={onFocus}
           onBlur={onBlur}
           rows={8}
         />
       ) : (
         <div className="body-preview">
-          {value.trim().length > 0 ? <Markdown source={value} /> : <p className="muted">Nothing to preview.</p>}
+          {value.trim().length > 0 ? (
+            <Markdown source={value} />
+          ) : (
+            <p className="muted">Nothing to preview.</p>
+          )}
         </div>
       )}
       {hint}
@@ -96,7 +103,15 @@ interface IssueModalProps {
 // The single editing surface (#36): a two-column detail modal (header / main /
 // sidebar) opened from a board card, reused in create mode from the board's "New
 // issue" button. Every field autosaves independently - no global Save/Cancel.
-export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onClose }: IssueModalProps) {
+export function IssueModal({
+  client,
+  fetchImpl,
+  slug,
+  issue,
+  labels,
+  issues,
+  onClose
+}: IssueModalProps) {
   const dialogRef = useModalDialog()
   const headingId = useId()
 
@@ -105,7 +120,11 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
   const [body, setBody] = useState(issue?.body ?? '')
   const [type, setType] = useState(issue?.type ?? 'task')
   const [bodyMode, setBodyMode] = useState<BodyMode>('edit')
-  const [remote, setRemote] = useState<{ title?: boolean; body?: boolean }>({})
+  const [remote, setRemote] = useState<{
+    title?: boolean
+    body?: boolean
+    type?: boolean
+  }>({})
   const [comments, setComments] = useState<Comment[]>([])
   const [actors, setActors] = useState<Actor[]>([])
   const [commentDraft, setCommentDraft] = useState('')
@@ -120,6 +139,8 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
   titleRef.current = title
   const bodyRef = useRef(body)
   bodyRef.current = body
+  const typeRef = useRef(type)
+  typeRef.current = type
   const dirtyRef = useRef<Set<DirtyField>>(new Set())
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
@@ -142,8 +163,10 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
       return
     }
     void (async () => {
-      const res = await client.api.projects[':slug'].issues[':number'].comments.$get({
-        param: { slug, number: String(number) },
+      const res = await client.api.projects[':slug'].issues[
+        ':number'
+      ].comments.$get({
+        param: { slug, number: String(number) }
       })
       if (res.ok) {
         setComments(await res.json())
@@ -157,7 +180,7 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
   useEffect(
     () =>
       subscribeToProjectEvents(fetchImpl, slug, {
-        onIssueChanged: (next) => {
+        onIssueChanged: next => {
           const cur = currentRef.current
           if (!cur || next.id !== cur.id) {
             return
@@ -165,32 +188,39 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
           setCurrent(next)
           if (dirtyRef.current.has('title')) {
             if (next.title !== titleRef.current) {
-              setRemote((r) => ({ ...r, title: true }))
+              setRemote(r => ({ ...r, title: true }))
             }
           } else {
             setTitle(next.title)
           }
           if (dirtyRef.current.has('body')) {
             if (next.body !== bodyRef.current) {
-              setRemote((r) => ({ ...r, body: true }))
+              setRemote(r => ({ ...r, body: true }))
             }
           } else {
             setBody(next.body)
           }
+          if (dirtyRef.current.has('type')) {
+            if (next.type !== typeRef.current) {
+              setRemote(r => ({ ...r, type: true }))
+            }
+          } else {
+            setType(next.type)
+          }
         },
-        onIssueDeleted: (id) => {
+        onIssueDeleted: id => {
           if (currentRef.current && id === currentRef.current.id) {
             onCloseRef.current()
           }
         },
-        onCommentCreated: (comment) => {
+        onCommentCreated: comment => {
           const cur = currentRef.current
           if (cur && comment.issueId === cur.id) {
-            setComments((prev) => upsertById(prev, comment))
+            setComments(prev => upsertById(prev, comment))
           }
-        },
+        }
       }),
-    [fetchImpl, slug],
+    [fetchImpl, slug]
   )
 
   // One PATCH per field (#36): absent fields stay unchanged. The returned snapshot
@@ -209,7 +239,7 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
       }
       const res = await client.api.projects[':slug'].issues[':number'].$patch({
         param: { slug, number: String(cur.number) },
-        json,
+        json
       })
       if (!res.ok) {
         setError('Could not save your change.')
@@ -220,12 +250,12 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
         setCurrent(updated)
       }
     },
-    [client, slug],
+    [client, slug]
   )
 
   const commitTitle = () => {
     dirtyRef.current.delete('title')
-    setRemote((r) => ({ ...r, title: false }))
+    setRemote(r => ({ ...r, title: false }))
     const cur = currentRef.current
     if (cur && title.trim().length > 0 && title !== cur.title) {
       void patchIssue({ title })
@@ -234,10 +264,23 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
 
   const commitBody = () => {
     dirtyRef.current.delete('body')
-    setRemote((r) => ({ ...r, body: false }))
+    setRemote(r => ({ ...r, body: false }))
     const cur = currentRef.current
     if (cur && body !== cur.body) {
       void patchIssue({ body })
+    }
+  }
+
+  const commitType = () => {
+    dirtyRef.current.delete('type')
+    setRemote(r => ({ ...r, type: false }))
+    const cur = currentRef.current
+    const trimmed = type.trim()
+    // Type is required server-side (min 1); an empty edit reverts to the current value.
+    if (cur && trimmed.length > 0 && trimmed !== cur.type) {
+      void patchIssue({ type: trimmed })
+    } else if (cur && trimmed.length === 0) {
+      setType(cur.type)
     }
   }
 
@@ -250,7 +293,7 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
     void (async () => {
       const res = await client.api.projects[':slug'].issues.$post({
         param: { slug },
-        json: { title: trimmed, type: type.trim() || 'task', body },
+        json: { title: trimmed, type: type.trim() || 'task', body }
       })
       if (!res.ok) {
         setError('Could not create the issue.')
@@ -272,7 +315,7 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
     }
     void (async () => {
       const res = await client.api.projects[':slug'].issues[':number'].$delete({
-        param: { slug, number: String(cur.number) },
+        param: { slug, number: String(cur.number) }
       })
       if (res.ok) {
         onClose()
@@ -292,9 +335,11 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
     void (async () => {
       try {
         const actorId = await ensureWebActor(client)
-        const res = await client.api.projects[':slug'].issues[':number'].comments.$post({
+        const res = await client.api.projects[':slug'].issues[
+          ':number'
+        ].comments.$post({
           param: { slug, number: String(cur.number) },
-          json: { actorId, body: text },
+          json: { actorId, body: text }
         })
         if (!res.ok) {
           throw new Error('comment failed')
@@ -362,32 +407,50 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
   const addBlocker = (blockerNumber: number) => {
     const param = issueParam()
     if (param) {
-      void client.api.projects[':slug'].issues[':number']['blocked-by'][':blockerNumber']
+      void client.api.projects[':slug'].issues[':number']['blocked-by'][
+        ':blockerNumber'
+      ]
         .$put({ param: { ...param, blockerNumber: String(blockerNumber) } })
         .then(relationshipError('Could not add the blocker.'))
     }
   }
 
-  const attachedIds = new Set((current?.labels ?? []).map((l) => l.id))
-  const availableLabels = labels.filter((l) => !attachedIds.has(l.id))
-  const candidateIssues = issues.filter((i) => !current || i.id !== current.id)
-  const parent = current ? issues.find((i) => i.id === current.parentId) : undefined
+  const attachedIds = new Set((current?.labels ?? []).map(l => l.id))
+  const availableLabels = labels.filter(l => !attachedIds.has(l.id))
+  const candidateIssues = issues.filter(i => !current || i.id !== current.id)
+  const parent = current
+    ? issues.find(i => i.id === current.parentId)
+    : undefined
 
-  const authorName = (actorId: number) => actors.find((a) => a.id === actorId)?.name ?? 'Unknown'
+  const authorName = (actorId: number) =>
+    actors.find(a => a.id === actorId)?.name ?? 'Unknown'
 
   return (
+    // Click-away is a mouse-only enhancement; keyboard users close with Escape (the
+    // dialog's native onCancel below), so keyboard parity is intact. The a11y rules
+    // can't see that, hence the scoped disable.
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events
     <dialog
       ref={dialogRef}
       className="modal issue-modal"
       aria-labelledby={headingId}
-      onCancel={(e) => {
+      onCancel={e => {
         e.preventDefault()
         onClose()
+      }}
+      // Click-away close: a click landing on the dialog element itself is the
+      // backdrop/padding (content sits in child elements), so close on it.
+      onClick={e => {
+        if (e.target === e.currentTarget) {
+          onClose()
+        }
       }}
     >
       <header className="issue-modal-header">
         <h2 id={headingId}>{current ? current.key : 'New issue'}</h2>
-        {current ? <span className="issue-type-badge">{current.type}</span> : null}
+        {current ? (
+          <span className="issue-type-badge">{current.type}</span>
+        ) : null}
         <div className="issue-modal-header-actions">
           {current ? (
             confirmingDelete ? (
@@ -396,12 +459,19 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
                 <button type="button" className="danger" onClick={deleteIssue}>
                   Delete
                 </button>
-                <button type="button" onClick={() => setConfirmingDelete(false)}>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                >
                   Cancel
                 </button>
               </span>
             ) : (
-              <button type="button" className="danger" onClick={() => setConfirmingDelete(true)}>
+              <button
+                type="button"
+                className="danger"
+                onClick={() => setConfirmingDelete(true)}
+              >
                 Delete
               </button>
             )
@@ -427,11 +497,13 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
                 className="issue-title-input"
                 value={title}
                 onFocus={() => dirtyRef.current.add('title')}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={e => setTitle(e.target.value)}
                 onBlur={commitTitle}
               />
               {remote.title ? (
-                <output className="field-hint">Changed remotely - your edit will win on save.</output>
+                <output className="field-hint">
+                  Changed remotely - your edit will win on save.
+                </output>
               ) : null}
             </label>
 
@@ -446,7 +518,9 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
                 onBlur={commitBody}
                 hint={
                   remote.body ? (
-                    <output className="field-hint">Changed remotely - your edit will win on save.</output>
+                    <output className="field-hint">
+                      Changed remotely - your edit will win on save.
+                    </output>
                   ) : null
                 }
               />
@@ -455,10 +529,12 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
             <section className="comments" aria-label="Comments">
               <h3>Comments</h3>
               <ul className="comment-list">
-                {comments.map((comment) => (
+                {comments.map(comment => (
                   <li key={comment.id} className="comment">
                     <div className="comment-meta">
-                      <span className="comment-author">{authorName(comment.actorId)}</span>
+                      <span className="comment-author">
+                        {authorName(comment.actorId)}
+                      </span>
                       <time dateTime={comment.createdAt}>
                         {new Date(comment.createdAt).toLocaleString()}
                       </time>
@@ -472,10 +548,13 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
                   aria-label="Add a comment"
                   placeholder="Add a comment"
                   value={commentDraft}
-                  onChange={(e) => setCommentDraft(e.target.value)}
+                  onChange={e => setCommentDraft(e.target.value)}
                   rows={3}
                 />
-                <button type="submit" disabled={commentDraft.trim().length === 0}>
+                <button
+                  type="submit"
+                  disabled={commentDraft.trim().length === 0}
+                >
                   Comment
                 </button>
               </form>
@@ -484,10 +563,29 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
 
           <aside className="issue-sidebar">
             <label className="field">
+              <span>Type</span>
+              <input
+                value={type}
+                onFocus={() => dirtyRef.current.add('type')}
+                onChange={e => setType(e.target.value)}
+                onBlur={commitType}
+              />
+              {remote.type ? (
+                <output className="field-hint">
+                  Changed remotely - your edit will win on save.
+                </output>
+              ) : null}
+            </label>
+
+            <label className="field">
               <span>State</span>
               <select
                 value={current.state}
-                onChange={(e) => void patchIssue({ state: e.target.value === 'closed' ? 'closed' : 'open' })}
+                onChange={e =>
+                  void patchIssue({
+                    state: e.target.value === 'closed' ? 'closed' : 'open'
+                  })
+                }
               >
                 <option value="open">Open</option>
                 <option value="closed">Closed</option>
@@ -498,12 +596,15 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
               <span>Assignee</span>
               <select
                 value={current.assigneeId ?? ''}
-                onChange={(e) =>
-                  void patchIssue({ assigneeId: e.target.value === '' ? null : Number(e.target.value) })
+                onChange={e =>
+                  void patchIssue({
+                    assigneeId:
+                      e.target.value === '' ? null : Number(e.target.value)
+                  })
                 }
               >
                 <option value="">Unassigned</option>
-                {actors.map((actor) => (
+                {actors.map(actor => (
                   <option key={actor.id} value={actor.id}>
                     {actor.name}
                   </option>
@@ -513,8 +614,11 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
 
             <div className="field">
               <span id={`${headingId}-labels`}>Labels</span>
-              <ul className="label-chips" aria-labelledby={`${headingId}-labels`}>
-                {current.labels.map((label) => (
+              <ul
+                className="label-chips"
+                aria-labelledby={`${headingId}-labels`}
+              >
+                {current.labels.map(label => (
                   <li key={label.id} className="label-chip">
                     {label.name}
                     <button
@@ -531,14 +635,14 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
                 <select
                   aria-label="Add a label"
                   value=""
-                  onChange={(e) => {
+                  onChange={e => {
                     if (e.target.value !== '') {
                       attachLabel(Number(e.target.value))
                     }
                   }}
                 >
                   <option value="">Add a label…</option>
-                  {availableLabels.map((label) => (
+                  {availableLabels.map(label => (
                     <option key={label.id} value={label.id}>
                       {label.name}
                     </option>
@@ -552,7 +656,7 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
               <select
                 aria-label="Parent"
                 value={parent ? String(parent.number) : ''}
-                onChange={(e) => {
+                onChange={e => {
                   if (e.target.value === '') {
                     clearParent()
                   } else {
@@ -561,7 +665,7 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
                 }}
               >
                 <option value="">No parent</option>
-                {candidateIssues.map((i) => (
+                {candidateIssues.map(i => (
                   <option key={i.id} value={i.number}>
                     {i.key} {i.title}
                   </option>
@@ -572,7 +676,11 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
             <div className="field">
               <span>Blockers</span>
               <p className="blocker-status">
-                {current.blocked ? 'Blocked' : current.ready ? 'Ready' : 'No open blockers'}
+                {current.blocked
+                  ? 'Blocked'
+                  : current.ready
+                    ? 'Ready'
+                    : 'No open blockers'}
               </p>
               {/* ponytail: the issue read model exposes blocked/ready but not the
                   blocker list (#30), so this can only add a blocker, not list or
@@ -580,14 +688,14 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
               <select
                 aria-label="Add a blocker"
                 value=""
-                onChange={(e) => {
+                onChange={e => {
                   if (e.target.value !== '') {
                     addBlocker(Number(e.target.value))
                   }
                 }}
               >
                 <option value="">Add a blocker…</option>
-                {candidateIssues.map((i) => (
+                {candidateIssues.map(i => (
                   <option key={i.id} value={i.number}>
                     {i.key} {i.title}
                   </option>
@@ -604,16 +712,21 @@ export function IssueModal({ client, fetchImpl, slug, issue, labels, issues, onC
               className="issue-title-input"
               value={title}
               autoFocus
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={e => setTitle(e.target.value)}
             />
           </label>
           <label className="field">
             <span>Type</span>
-            <input value={type} onChange={(e) => setType(e.target.value)} />
+            <input value={type} onChange={e => setType(e.target.value)} />
           </label>
           <div className="field">
             <span>Body</span>
-            <BodyEditor value={body} mode={bodyMode} onModeChange={setBodyMode} onChange={setBody} />
+            <BodyEditor
+              value={body}
+              mode={bodyMode}
+              onModeChange={setBodyMode}
+              onChange={setBody}
+            />
           </div>
           <div className="modal-actions">
             <button type="button" onClick={onClose}>

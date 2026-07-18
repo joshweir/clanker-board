@@ -1,9 +1,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { eq } from 'drizzle-orm'
 import { createSelectSchema } from 'drizzle-zod'
-
 import type { Db } from '../db/client'
-import { ColumnAxisSchema, findBoard, findProjectBySlug, toBoard } from '../db/queries'
+import {
+  ColumnAxisSchema,
+  findBoard,
+  findProjectBySlug,
+  toBoard
+} from '../db/queries'
 import { boards, labels } from '../db/schema'
 import type { EventBus } from '../events/bus'
 import { jsonBody, SlugParamSchema } from './openapi'
@@ -23,9 +27,9 @@ export const BoardSchema = boardRow
 const UpdateBoardSchema = z
   .object({
     columnAxis: ColumnAxisSchema.refine(
-      (ids) => new Set(ids).size === ids.length,
-      'column_axis must not contain duplicate label ids',
-    ),
+      ids => new Set(ids).size === ids.length,
+      'column_axis must not contain duplicate label ids'
+    )
   })
   .openapi('UpdateBoard')
 
@@ -36,8 +40,8 @@ const getBoardRoute = createRoute({
   request: { params: SlugParamSchema },
   responses: {
     200: jsonBody(BoardSchema, 'The board'),
-    404: jsonBody(ErrorSchema, 'No project with this slug'),
-  },
+    404: jsonBody(ErrorSchema, 'No project with this slug')
+  }
 })
 
 const updateBoardRoute = createRoute({
@@ -46,13 +50,19 @@ const updateBoardRoute = createRoute({
   summary: "Replace the board's whole column_axis of label ids",
   request: {
     params: SlugParamSchema,
-    body: { content: { 'application/json': { schema: UpdateBoardSchema } }, required: true },
+    body: {
+      content: { 'application/json': { schema: UpdateBoardSchema } },
+      required: true
+    }
   },
   responses: {
     200: jsonBody(BoardSchema, 'The updated board'),
-    400: jsonBody(ErrorSchema, 'Validation failure (duplicate or non-project label id)'),
-    404: jsonBody(ErrorSchema, 'No project with this slug'),
-  },
+    400: jsonBody(
+      ErrorSchema,
+      'Validation failure (duplicate or non-project label id)'
+    ),
+    404: jsonBody(ErrorSchema, 'No project with this slug')
+  }
 })
 
 // The board is a stored view configuration (#24): one per project, auto-created with
@@ -64,9 +74,9 @@ export function boardRouter(db: Db, bus: EventBus) {
       if (!result.success) {
         return c.json({ error: z.prettifyError(result.error) }, 400)
       }
-    },
+    }
   })
-    .openapi(getBoardRoute, (c) => {
+    .openapi(getBoardRoute, c => {
       const project = findProjectBySlug(db, c.req.valid('param').slug)
       if (!project) {
         return c.json({ error: 'Project not found' }, 404)
@@ -77,7 +87,7 @@ export function boardRouter(db: Db, bus: EventBus) {
       }
       return c.json(toBoard(board), 200)
     })
-    .openapi(updateBoardRoute, (c) => {
+    .openapi(updateBoardRoute, c => {
       const project = findProjectBySlug(db, c.req.valid('param').slug)
       if (!project) {
         return c.json({ error: 'Project not found' }, 404)
@@ -91,15 +101,21 @@ export function boardRouter(db: Db, bus: EventBus) {
           .from(labels)
           .where(eq(labels.projectId, project.id))
           .all()
-          .map((r) => r.id),
+          .map(r => r.id)
       )
-      const unknown = columnAxis.find((id) => !projectLabelIds.has(id))
+      const unknown = columnAxis.find(id => !projectLabelIds.has(id))
       if (unknown !== undefined) {
-        return c.json({ error: `Label ${unknown} does not belong to this project` }, 400)
+        return c.json(
+          { error: `Label ${unknown} does not belong to this project` },
+          400
+        )
       }
       const row = db
         .update(boards)
-        .set({ columnAxis: JSON.stringify(columnAxis), updatedAt: new Date().toISOString() })
+        .set({
+          columnAxis: JSON.stringify(columnAxis),
+          updatedAt: new Date().toISOString()
+        })
         .where(eq(boards.projectId, project.id))
         .returning()
         .get()

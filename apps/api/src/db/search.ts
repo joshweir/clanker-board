@@ -1,6 +1,5 @@
 import { eq, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
-
 import type { Db } from './client'
 import { toIssue } from './queries'
 import { issues } from './schema'
@@ -43,11 +42,11 @@ export interface SearchResults {
 // raise a parse error. No trailing `*`, so there is NO prefix matching - porter
 // stemming alone provides fuzziness. Returns null when the query has no usable terms.
 export function sanitizeFtsQuery(raw: string): string | null {
-  const terms = raw.split(/\s+/).filter((term) => term.length > 0)
+  const terms = raw.split(/\s+/).filter(term => term.length > 0)
   if (terms.length === 0) {
     return null
   }
-  return terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(' OR ')
+  return terms.map(term => `"${term.replace(/"/g, '""')}"`).join(' OR ')
 }
 
 // One ordered FTS candidate row: the parent issue id, whether the hit came from an
@@ -57,7 +56,7 @@ const CandidateSchema = z.object({
   issueId: z.number().int(),
   sourceKind: z.enum(['issue', 'comment']),
   titleSnippet: z.string(),
-  bodySnippet: z.string(),
+  bodySnippet: z.string()
 })
 
 const MARK_OPEN = '<mark>'
@@ -78,16 +77,21 @@ export function searchIssues(
   db: Db,
   project: { id: number; key: string },
   rawQuery: string,
-  filters: SearchFilters,
+  filters: SearchFilters
 ): SearchResults {
   const match = sanitizeFtsQuery(rawQuery)
   if (match === null) {
-    return { results: [], total: 0, offset: filters.offset, limit: filters.limit }
+    return {
+      results: [],
+      total: 0,
+      offset: filters.offset,
+      limit: filters.limit
+    }
   }
 
   const conditions: SQL[] = [
     sql`issues_fts MATCH ${match}`,
-    sql`i.project_id = ${project.id}`,
+    sql`i.project_id = ${project.id}`
   ]
   if (filters.type !== undefined) {
     conditions.push(sql`i.type = ${filters.type}`)
@@ -97,11 +101,11 @@ export function searchIssues(
   }
   if (filters.labelIds.length > 0) {
     const ids = sql.join(
-      filters.labelIds.map((id) => sql`${id}`),
-      sql`, `,
+      filters.labelIds.map(id => sql`${id}`),
+      sql`, `
     )
     conditions.push(
-      sql`EXISTS (SELECT 1 FROM issue_labels il WHERE il.issue_id = i.id AND il.label_id IN (${ids}))`,
+      sql`EXISTS (SELECT 1 FROM issue_labels il WHERE il.issue_id = i.id AND il.label_id IN (${ids}))`
     )
   }
   const where = sql.join(conditions, sql` AND `)
@@ -125,28 +129,52 @@ export function searchIssues(
   // issue row, a <mark> in the title snippet means the title matched; otherwise the
   // body did. Comment rows always report `comment`.
   const seen = new Set<number>()
-  const grouped: { issueId: number; matchedIn: MatchedIn; snippet: string }[] = []
+  const grouped: { issueId: number; matchedIn: MatchedIn; snippet: string }[] =
+    []
   for (const row of candidates) {
     if (seen.has(row.issueId)) {
       continue
     }
     seen.add(row.issueId)
     if (row.sourceKind === 'comment') {
-      grouped.push({ issueId: row.issueId, matchedIn: 'comment', snippet: row.bodySnippet })
+      grouped.push({
+        issueId: row.issueId,
+        matchedIn: 'comment',
+        snippet: row.bodySnippet
+      })
     } else if (row.titleSnippet.includes(MARK_OPEN)) {
-      grouped.push({ issueId: row.issueId, matchedIn: 'title', snippet: row.titleSnippet })
+      grouped.push({
+        issueId: row.issueId,
+        matchedIn: 'title',
+        snippet: row.titleSnippet
+      })
     } else {
-      grouped.push({ issueId: row.issueId, matchedIn: 'body', snippet: row.bodySnippet })
+      grouped.push({
+        issueId: row.issueId,
+        matchedIn: 'body',
+        snippet: row.bodySnippet
+      })
     }
   }
 
   const page = grouped.slice(filters.offset, filters.offset + filters.limit)
-  const results = page.flatMap((hit) => {
+  const results = page.flatMap(hit => {
     const row = db.select().from(issues).where(eq(issues.id, hit.issueId)).get()
     return row
-      ? [{ issue: toIssue(db, row, project.key), matchedIn: hit.matchedIn, snippet: hit.snippet }]
+      ? [
+          {
+            issue: toIssue(db, row, project.key),
+            matchedIn: hit.matchedIn,
+            snippet: hit.snippet
+          }
+        ]
       : []
   })
 
-  return { results, total: grouped.length, offset: filters.offset, limit: filters.limit }
+  return {
+    results,
+    total: grouped.length,
+    offset: filters.offset,
+    limit: filters.limit
+  }
 }

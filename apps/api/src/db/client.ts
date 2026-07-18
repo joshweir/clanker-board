@@ -1,9 +1,7 @@
 import { join } from 'node:path'
-
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
-
 import * as schema from './schema'
 
 // import.meta.dirname (not a file:// URL) so this resolves under jsdom too,

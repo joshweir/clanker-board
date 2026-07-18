@@ -6,14 +6,14 @@ skill looks for - it maps each abstract operation to the concrete `gh` command h
 
 ## Model
 
-| Wayfinder concept | Here |
-|---|---|
-| Map | An issue labelled `wayfinder:map` |
-| Ticket | A **native sub-issue** of the map, labelled `wayfinder:<type>` |
-| Ticket type | Label: `wayfinder:research` \| `wayfinder:prototype` \| `wayfinder:grilling` \| `wayfinder:task` |
-| Claim | Assignee (`@me`). Open + unassigned = unclaimed |
-| Blocking | Native GitHub issue **dependencies** (`blocked_by`) |
-| Frontier | Open sub-issues that are unassigned and have every blocker closed |
+| Wayfinder concept | Here                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| Map               | An issue labelled `wayfinder:map`                                                                |
+| Ticket            | A **native sub-issue** of the map, labelled `wayfinder:<type>`                                   |
+| Ticket type       | Label: `wayfinder:research` \| `wayfinder:prototype` \| `wayfinder:grilling` \| `wayfinder:task` |
+| Claim             | Assignee (`@me`). Open + unassigned = unclaimed                                                  |
+| Blocking          | Native GitHub issue **dependencies** (`blocked_by`)                                              |
+| Frontier          | Open sub-issues that are unassigned and have every blocker closed                                |
 
 Node/db id needed by the sub-issue and dependency APIs (distinct from issue number):
 

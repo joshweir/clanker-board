@@ -1,12 +1,10 @@
 import { relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-
 import { createApp } from './app'
-import { createDb } from './db/client'
 import { resolveDbPath } from './db-path'
+import { createDb } from './db/client'
 
 const dbPath = resolveDbPath()
 
@@ -27,11 +25,13 @@ if (isProd) {
   // SPA fallback: any non-/api route that matched no static file renders the
   // app shell so client-side routes (e.g. /projects/:slug) resolve on reload.
   app.get('*', async (c, next) =>
-    c.req.path.startsWith('/api') ? next() : serveStatic({ root, path: 'index.html' })(c, next),
+    c.req.path.startsWith('/api')
+      ? next()
+      : serveStatic({ root, path: 'index.html' })(c, next)
   )
 }
 
-serve({ fetch: app.fetch, port }, (info) => {
+serve({ fetch: app.fetch, port }, info => {
   console.log(`clanker-board api listening on http://localhost:${info.port}`)
   console.log(`  docs: http://localhost:${info.port}/docs`)
 })

@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'vitest'
-
 import { jumpNumber, snippetSegments } from './search'
 
 describe('jumpNumber', () => {
@@ -27,14 +26,16 @@ describe('snippetSegments', () => {
     expect(snippetSegments('fix the <mark>login</mark> flow')).toEqual([
       { text: 'fix the ', mark: false },
       { text: 'login', mark: true },
-      { text: ' flow', mark: false },
+      { text: ' flow', mark: false }
     ])
   })
 
   test('treats only the literal delimiters as structure (raw text stays escaped text)', () => {
     // A body containing angle brackets is returned as plain, unmarked text - it can
     // never become markup because the renderer emits it as a React text node.
-    expect(snippetSegments('a <b> c')).toEqual([{ text: 'a <b> c', mark: false }])
+    expect(snippetSegments('a <b> c')).toEqual([
+      { text: 'a <b> c', mark: false }
+    ])
   })
 
   test('handles a snippet with no highlight', () => {

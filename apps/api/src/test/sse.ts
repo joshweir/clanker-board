@@ -53,11 +53,14 @@ export async function* readEvents(res: Response): AsyncGenerator<SseEvent> {
 export async function nextEventOfType(
   events: AsyncGenerator<SseEvent>,
   type: string,
-  budgetMs = 2000,
+  budgetMs = 2000
 ): Promise<SseEvent> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`timed out waiting for ${type}`)), budgetMs)
+    timer = setTimeout(
+      () => reject(new Error(`timed out waiting for ${type}`)),
+      budgetMs
+    )
   })
   try {
     for (;;) {

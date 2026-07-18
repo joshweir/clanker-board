@@ -1,7 +1,6 @@
 import { z } from 'zod'
-
-import { readEventStream } from './sse'
 import type { Board, Comment, Issue, Label } from './api'
+import { readEventStream } from './sse'
 
 // Per-project SSE payloads, validated at the client boundary (no casts). Each
 // `satisfies z.ZodType<T>` ties the snapshot shape to the API type, so a contract
@@ -11,7 +10,7 @@ const labelSnapshot = z.object({
   projectId: z.number(),
   name: z.string(),
   createdAt: z.string(),
-  updatedAt: z.string(),
+  updatedAt: z.string()
 }) satisfies z.ZodType<Label>
 
 const issueSnapshot = z.object({
@@ -30,7 +29,7 @@ const issueSnapshot = z.object({
   blocked: z.boolean(),
   ready: z.boolean(),
   createdAt: z.string(),
-  updatedAt: z.string(),
+  updatedAt: z.string()
 }) satisfies z.ZodType<Issue>
 
 const boardSnapshot = z.object({
@@ -38,7 +37,7 @@ const boardSnapshot = z.object({
   projectId: z.number(),
   columnAxis: z.array(z.number()),
   createdAt: z.string(),
-  updatedAt: z.string(),
+  updatedAt: z.string()
 }) satisfies z.ZodType<Board>
 
 // A comment snapshot is a flat log entry (#31): no derived fields, no updatedAt.
@@ -47,7 +46,7 @@ const commentSnapshot = z.object({
   issueId: z.number(),
   actorId: z.number(),
   body: z.string(),
-  createdAt: z.string(),
+  createdAt: z.string()
 }) satisfies z.ZodType<Comment>
 
 // issue.deleted / label.deleted both carry the entity id (issue.deleted also a
@@ -76,7 +75,7 @@ export interface ProjectEventHandlers {
 export function subscribeToProjectEvents(
   fetchImpl: typeof fetch,
   slug: string,
-  handlers: ProjectEventHandlers,
+  handlers: ProjectEventHandlers
 ): () => void {
   const controller = new AbortController()
   void readEventStream(
@@ -104,7 +103,7 @@ export function subscribeToProjectEvents(
           handlers.onBoardChanged?.(boardSnapshot.parse(data))
           break
       }
-    },
+    }
   )
   return () => {
     controller.abort()

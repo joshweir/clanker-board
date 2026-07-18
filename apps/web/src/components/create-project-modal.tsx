@@ -1,7 +1,6 @@
 import { useState } from 'react'
-
-import { Modal } from './modal'
 import type { ApiClient } from '../api'
+import { Modal } from './modal'
 
 // Suggest a key from the name: uppercase, alphanumerics only, no leading digit,
 // clamped to the 10-char max. The field stays editable and is re-validated on
@@ -20,7 +19,11 @@ interface CreateProjectModalProps {
   onCreated: () => void
 }
 
-export function CreateProjectModal({ client, onClose, onCreated }: CreateProjectModalProps) {
+export function CreateProjectModal({
+  client,
+  onClose,
+  onCreated
+}: CreateProjectModalProps) {
   const [name, setName] = useState('')
   const [key, setKey] = useState('')
   const [keyEdited, setKeyEdited] = useState(false)
@@ -36,7 +39,9 @@ export function CreateProjectModal({ client, onClose, onCreated }: CreateProject
     setSubmitting(true)
     // The server's zod schema is the single source of shape + uniqueness
     // validation (#24); its 400/409 message is surfaced back to the user.
-    const res = await client.api.projects.$post({ json: { name: name.trim(), key: shownKey } })
+    const res = await client.api.projects.$post({
+      json: { name: name.trim(), key: shownKey }
+    })
     setSubmitting(false)
     if (res.ok) {
       onCreated()
@@ -48,14 +53,14 @@ export function CreateProjectModal({ client, onClose, onCreated }: CreateProject
 
   return (
     <Modal title="Create project" onClose={onClose}>
-      <form onSubmit={(event) => void submit(event)}>
+      <form onSubmit={event => void submit(event)}>
         <label>
           Name
           <input
             name="name"
             value={name}
             autoComplete="off"
-            onChange={(e) => setName(e.target.value)}
+            onChange={e => setName(e.target.value)}
           />
         </label>
         <label>
@@ -64,7 +69,7 @@ export function CreateProjectModal({ client, onClose, onCreated }: CreateProject
             name="key"
             value={shownKey}
             autoComplete="off"
-            onChange={(e) => {
+            onChange={e => {
               setKeyEdited(true)
               setKey(e.target.value.toUpperCase())
             }}

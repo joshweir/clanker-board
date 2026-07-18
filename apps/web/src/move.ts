@@ -1,6 +1,6 @@
+import type { Issue, Label } from './api'
 import type { BoardColumn } from './board-layout'
 import { rankBetween } from './rank'
-import type { Issue, Label } from './api'
 
 // A board drop persists as plain issue mutations - there is no move endpoint (#34).
 // planMove turns "card dropped into column at rank R" into the exact set of label
@@ -17,8 +17,12 @@ export interface MovePlan {
 
 // Compute the rank of a drop: strictly between the cards that will bracket it once
 // the dragged card is removed (hello-pangea/dnd destination.index is post-removal).
-export function rankForDrop(targetCards: Issue[], draggedId: number, destIndex: number): string {
-  const without = targetCards.filter((card) => card.id !== draggedId)
+export function rankForDrop(
+  targetCards: Issue[],
+  draggedId: number,
+  destIndex: number
+): string {
+  const without = targetCards.filter(card => card.id !== draggedId)
   const prev = without[destIndex - 1]?.rank ?? null
   const next = without[destIndex]?.rank ?? null
   return rankBetween(prev, next)
@@ -29,7 +33,11 @@ export function rankForDrop(targetCards: Issue[], draggedId: number, destIndex: 
 // the first columns the board lays out (#33), so a column Draggable's index maps
 // straight onto its columnAxis index. The result PATCHes the WHOLE axis; other
 // clients converge off board.changed. An out-of-range `from` is a no-op guard.
-export function reorderColumnAxis(axis: number[], from: number, to: number): number[] {
+export function reorderColumnAxis(
+  axis: number[],
+  from: number,
+  to: number
+): number[] {
   const next = [...axis]
   const [moved] = next.splice(from, 1)
   if (moved === undefined) {
@@ -46,9 +54,16 @@ export function reorderColumnAxis(axis: number[], from: number, to: number): num
 //   label, including a stale one kept while closed).
 // - into No status: clear all axis labels so the card carries none.
 // Non-axis labels are never touched.
-export function planMove(issue: Issue, target: BoardColumn, columnAxis: number[], newRank: string): MovePlan {
+export function planMove(
+  issue: Issue,
+  target: BoardColumn,
+  columnAxis: number[],
+  newRank: string
+): MovePlan {
   const axisSet = new Set(columnAxis)
-  const currentAxisLabelIds = issue.labels.filter((label) => axisSet.has(label.id)).map((label) => label.id)
+  const currentAxisLabelIds = issue.labels
+    .filter(label => axisSet.has(label.id))
+    .map(label => label.id)
   const plan: MovePlan = { rank: newRank, attach: [], detach: [] }
 
   if (target.kind === 'done') {
@@ -69,8 +84,8 @@ export function planMove(issue: Issue, target: BoardColumn, columnAxis: number[]
   }
 
   const targetId = target.labelId
-  plan.detach = currentAxisLabelIds.filter((id) => id !== targetId)
-  if (!issue.labels.some((label) => label.id === targetId)) {
+  plan.detach = currentAxisLabelIds.filter(id => id !== targetId)
+  if (!issue.labels.some(label => label.id === targetId)) {
     plan.attach = [targetId]
   }
   return plan
@@ -78,12 +93,16 @@ export function planMove(issue: Issue, target: BoardColumn, columnAxis: number[]
 
 // The optimistic issue after a plan is applied, so the board reflects the move
 // instantly before the PATCH/attach/detach round-trips resolve (#34).
-export function applyPlan(issue: Issue, plan: MovePlan, labelById: Map<number, Label>): Issue {
+export function applyPlan(
+  issue: Issue,
+  plan: MovePlan,
+  labelById: Map<number, Label>
+): Issue {
   const detached = new Set(plan.detach)
-  let labels = issue.labels.filter((label) => !detached.has(label.id))
+  let labels = issue.labels.filter(label => !detached.has(label.id))
   for (const id of plan.attach) {
     const label = labelById.get(id)
-    if (label && !labels.some((existing) => existing.id === id)) {
+    if (label && !labels.some(existing => existing.id === id)) {
       labels = [...labels, label]
     }
   }

@@ -48,9 +48,7 @@
       "indexes": {
         "projects_key_ci_unique": {
           "name": "projects_key_ci_unique",
-          "columns": [
-            "lower(\"key\")"
-          ],
+          "columns": ["lower(\"key\")"],
           "isUnique": true
         }
       },

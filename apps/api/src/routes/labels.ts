@@ -1,9 +1,13 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi'
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm'
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
-
 import type { Db } from '../db/client'
-import { findIssue, findProjectBySlug, labelsForIssue, toIssue } from '../db/queries'
+import {
+  findIssue,
+  findProjectBySlug,
+  labelsForIssue,
+  toIssue
+} from '../db/queries'
 import { issueLabels, issues, labels } from '../db/schema'
 import type { EventBus } from '../events/bus'
 import { idParam, jsonBody, SlugParamSchema } from './openapi'
@@ -14,7 +18,7 @@ import { ErrorSchema } from './projects'
 export const LabelSchema = createSelectSchema(labels).openapi('Label')
 
 const LabelBodySchema = createInsertSchema(labels, {
-  name: (schema) => schema.min(1, 'name is required'),
+  name: schema => schema.min(1, 'name is required')
 })
   .pick({ name: true })
   .openapi('LabelBody')
@@ -23,7 +27,7 @@ const LabelParamSchema = SlugParamSchema.extend({ id: idParam('id') })
 
 const AttachParamSchema = SlugParamSchema.extend({
   number: idParam('number'),
-  labelId: idParam('labelId'),
+  labelId: idParam('labelId')
 })
 
 // A label belongs to a project iff its projectId matches - the storage-layer guard
@@ -41,7 +45,12 @@ const findLabelByName = (db: Db, projectId: number, name: string) =>
   db
     .select()
     .from(labels)
-    .where(and(eq(labels.projectId, projectId), sql`lower(${labels.name}) = ${name.toLowerCase()}`))
+    .where(
+      and(
+        eq(labels.projectId, projectId),
+        sql`lower(${labels.name}) = ${name.toLowerCase()}`
+      )
+    )
     .get()
 
 // Issue reads embed their labels, so a label rename/delete changes the snapshot of
@@ -52,14 +61,17 @@ const republishIssuesWithLabel = (
   db: Db,
   bus: EventBus,
   project: { id: number; key: string },
-  issueRows: (typeof issues.$inferSelect)[],
+  issueRows: (typeof issues.$inferSelect)[]
 ): void => {
   for (const row of issueRows) {
     bus.publishIssueChanged(project.id, toIssue(db, row, project.key))
   }
 }
 
-const issuesWithLabel = (db: Db, labelId: number): (typeof issues.$inferSelect)[] =>
+const issuesWithLabel = (
+  db: Db,
+  labelId: number
+): (typeof issues.$inferSelect)[] =>
   db
     .select(getTableColumns(issues))
     .from(issues)
@@ -74,8 +86,8 @@ const listLabelsRoute = createRoute({
   request: { params: SlugParamSchema },
   responses: {
     200: jsonBody(z.array(LabelSchema), 'The project labels, ordered by name'),
-    404: jsonBody(ErrorSchema, 'No project with this slug'),
-  },
+    404: jsonBody(ErrorSchema, 'No project with this slug')
+  }
 })
 
 const createLabelRoute = createRoute({
@@ -84,14 +96,20 @@ const createLabelRoute = createRoute({
   summary: 'Create a label in a project',
   request: {
     params: SlugParamSchema,
-    body: { content: { 'application/json': { schema: LabelBodySchema } }, required: true },
+    body: {
+      content: { 'application/json': { schema: LabelBodySchema } },
+      required: true
+    }
   },
   responses: {
     201: jsonBody(LabelSchema, 'The created label'),
     400: jsonBody(ErrorSchema, 'Validation failure'),
     404: jsonBody(ErrorSchema, 'No project with this slug'),
-    409: jsonBody(ErrorSchema, 'A label with this name already exists in the project'),
-  },
+    409: jsonBody(
+      ErrorSchema,
+      'A label with this name already exists in the project'
+    )
+  }
 })
 
 const renameLabelRoute = createRoute({
@@ -100,14 +118,20 @@ const renameLabelRoute = createRoute({
   summary: 'Rename a label',
   request: {
     params: LabelParamSchema,
-    body: { content: { 'application/json': { schema: LabelBodySchema } }, required: true },
+    body: {
+      content: { 'application/json': { schema: LabelBodySchema } },
+      required: true
+    }
   },
   responses: {
     200: jsonBody(LabelSchema, 'The renamed label'),
     400: jsonBody(ErrorSchema, 'Validation failure'),
     404: jsonBody(ErrorSchema, 'No such project or label'),
-    409: jsonBody(ErrorSchema, 'A label with this name already exists in the project'),
-  },
+    409: jsonBody(
+      ErrorSchema,
+      'A label with this name already exists in the project'
+    )
+  }
 })
 
 const deleteLabelRoute = createRoute({
@@ -117,19 +141,20 @@ const deleteLabelRoute = createRoute({
   request: { params: LabelParamSchema },
   responses: {
     204: { description: 'Deleted' },
-    404: jsonBody(ErrorSchema, 'No such project or label'),
-  },
+    404: jsonBody(ErrorSchema, 'No such project or label')
+  }
 })
 
 const attachLabelRoute = createRoute({
   method: 'put',
   path: '/projects/{slug}/issues/{number}/labels/{labelId}',
-  summary: "Attach a label to an issue (idempotent), returning the issue's labels",
+  summary:
+    "Attach a label to an issue (idempotent), returning the issue's labels",
   request: { params: AttachParamSchema },
   responses: {
     200: jsonBody(z.array(LabelSchema), "The issue's labels after the attach"),
-    404: jsonBody(ErrorSchema, 'No such project, issue, or label'),
-  },
+    404: jsonBody(ErrorSchema, 'No such project, issue, or label')
+  }
 })
 
 const detachLabelRoute = createRoute({
@@ -139,8 +164,8 @@ const detachLabelRoute = createRoute({
   request: { params: AttachParamSchema },
   responses: {
     200: jsonBody(z.array(LabelSchema), "The issue's labels after the detach"),
-    404: jsonBody(ErrorSchema, 'No such project, issue, or label'),
-  },
+    404: jsonBody(ErrorSchema, 'No such project, issue, or label')
+  }
 })
 
 export function labelsRouter(db: Db, bus: EventBus) {
@@ -150,9 +175,9 @@ export function labelsRouter(db: Db, bus: EventBus) {
       if (!result.success) {
         return c.json({ error: z.prettifyError(result.error) }, 400)
       }
-    },
+    }
   })
-    .openapi(listLabelsRoute, (c) => {
+    .openapi(listLabelsRoute, c => {
       const project = findProjectBySlug(db, c.req.valid('param').slug)
       if (!project) {
         return c.json({ error: 'Project not found' }, 404)
@@ -165,7 +190,7 @@ export function labelsRouter(db: Db, bus: EventBus) {
         .all()
       return c.json(rows, 200)
     })
-    .openapi(createLabelRoute, (c) => {
+    .openapi(createLabelRoute, c => {
       const project = findProjectBySlug(db, c.req.valid('param').slug)
       if (!project) {
         return c.json({ error: 'Project not found' }, 404)
@@ -174,13 +199,20 @@ export function labelsRouter(db: Db, bus: EventBus) {
       // Sync driver, single process: check-then-insert cannot interleave; the
       // (project_id, lower(name)) unique index is the storage-layer backstop.
       if (findLabelByName(db, project.id, name)) {
-        return c.json({ error: `A label named "${name}" already exists in this project` }, 409)
+        return c.json(
+          { error: `A label named "${name}" already exists in this project` },
+          409
+        )
       }
-      const row = db.insert(labels).values({ projectId: project.id, name }).returning().get()
+      const row = db
+        .insert(labels)
+        .values({ projectId: project.id, name })
+        .returning()
+        .get()
       bus.publishLabelChanged(project.id, row)
       return c.json(row, 201)
     })
-    .openapi(renameLabelRoute, (c) => {
+    .openapi(renameLabelRoute, c => {
       const { slug, id } = c.req.valid('param')
       const project = findProjectBySlug(db, slug)
       if (!project) {
@@ -192,7 +224,10 @@ export function labelsRouter(db: Db, bus: EventBus) {
       const { name } = c.req.valid('json')
       const clash = findLabelByName(db, project.id, name)
       if (clash && clash.id !== id) {
-        return c.json({ error: `A label named "${name}" already exists in this project` }, 409)
+        return c.json(
+          { error: `A label named "${name}" already exists in this project` },
+          409
+        )
       }
       const row = db
         .update(labels)
@@ -208,7 +243,7 @@ export function labelsRouter(db: Db, bus: EventBus) {
       republishIssuesWithLabel(db, bus, project, issuesWithLabel(db, id))
       return c.json(row, 200)
     })
-    .openapi(deleteLabelRoute, (c) => {
+    .openapi(deleteLabelRoute, c => {
       const { slug, id } = c.req.valid('param')
       const project = findProjectBySlug(db, slug)
       if (!project) {
@@ -225,7 +260,7 @@ export function labelsRouter(db: Db, bus: EventBus) {
       republishIssuesWithLabel(db, bus, project, affected)
       return c.body(null, 204)
     })
-    .openapi(attachLabelRoute, (c) => {
+    .openapi(attachLabelRoute, c => {
       const { slug, number, labelId } = c.req.valid('param')
       const project = findProjectBySlug(db, slug)
       if (!project) {
@@ -239,12 +274,15 @@ export function labelsRouter(db: Db, bus: EventBus) {
         return c.json({ error: 'Label not found' }, 404)
       }
       // Composite PK makes re-attaching the same label a no-op (idempotent).
-      db.insert(issueLabels).values({ issueId: issue.id, labelId }).onConflictDoNothing().run()
+      db.insert(issueLabels)
+        .values({ issueId: issue.id, labelId })
+        .onConflictDoNothing()
+        .run()
       const attached = labelsForIssue(db, issue.id)
       bus.publishIssueChanged(project.id, toIssue(db, issue, project.key))
       return c.json(attached, 200)
     })
-    .openapi(detachLabelRoute, (c) => {
+    .openapi(detachLabelRoute, c => {
       const { slug, number, labelId } = c.req.valid('param')
       const project = findProjectBySlug(db, slug)
       if (!project) {
@@ -258,7 +296,12 @@ export function labelsRouter(db: Db, bus: EventBus) {
         return c.json({ error: 'Label not found' }, 404)
       }
       db.delete(issueLabels)
-        .where(and(eq(issueLabels.issueId, issue.id), eq(issueLabels.labelId, labelId)))
+        .where(
+          and(
+            eq(issueLabels.issueId, issue.id),
+            eq(issueLabels.labelId, labelId)
+          )
+        )
         .run()
       const remaining = labelsForIssue(db, issue.id)
       bus.publishIssueChanged(project.id, toIssue(db, issue, project.key))

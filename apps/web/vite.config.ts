@@ -15,7 +15,7 @@ export default defineConfig({
     proxy: {
       '/api': proxy,
       '/openapi.json': proxy,
-      '/docs': proxy,
-    },
-  },
+      '/docs': proxy
+    }
+  }
 })

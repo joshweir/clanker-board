@@ -1,6 +1,5 @@
 import { screen, within } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
-
 import type { ApiClient } from '../api'
 import { renderApp } from '../test/harness'
 
@@ -14,18 +13,30 @@ const param = { slug }
 // hc responses are unions of every declared status body; narrow at the seam so the
 // test never casts (CLAUDE.md). A seed failure is a test bug, so throw loudly.
 function expectId(body: unknown): number {
-  if (typeof body === 'object' && body !== null && 'id' in body && typeof body.id === 'number') {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'id' in body &&
+    typeof body.id === 'number'
+  ) {
     return body.id
   }
   throw new Error(`expected an entity with an id, got ${JSON.stringify(body)}`)
 }
 
 async function createLabel(client: ApiClient, name: string): Promise<number> {
-  return expectId(await (await client.api.projects[':slug'].labels.$post({ param, json: { name } })).json())
+  return expectId(
+    await (
+      await client.api.projects[':slug'].labels.$post({ param, json: { name } })
+    ).json()
+  )
 }
 
 async function createIssue(client: ApiClient, title: string): Promise<number> {
-  const res = await client.api.projects[':slug'].issues.$post({ param, json: { title, type: 'task' } })
+  const res = await client.api.projects[':slug'].issues.$post({
+    param,
+    json: { title, type: 'task' }
+  })
   const body = await res.json()
   if (!('number' in body)) {
     throw new Error(`expected a created issue, got ${JSON.stringify(body)}`)
@@ -33,21 +44,28 @@ async function createIssue(client: ApiClient, title: string): Promise<number> {
   return body.number
 }
 
-async function attachLabel(client: ApiClient, issueNumber: number, labelId: number): Promise<void> {
+async function attachLabel(
+  client: ApiClient,
+  issueNumber: number,
+  labelId: number
+): Promise<void> {
   await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
-    param: { slug, number: String(issueNumber), labelId: String(labelId) },
+    param: { slug, number: String(issueNumber), labelId: String(labelId) }
   })
 }
 
 async function setAxis(client: ApiClient, columnAxis: number[]): Promise<void> {
-  await client.api.projects[':slug'].board.$patch({ param, json: { columnAxis } })
+  await client.api.projects[':slug'].board.$patch({
+    param,
+    json: { columnAxis }
+  })
 }
 
 // Seed a project with a two-label axis and one placed card, then open its board.
 async function openSeededBoard() {
   let todo = 0
   let doing = 0
-  const { client, router } = await renderApp(async (client) => {
+  const { client, router } = await renderApp(async client => {
     await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } })
     todo = await createLabel(client, 'To Do')
     doing = await createLabel(client, 'Doing')
@@ -57,7 +75,11 @@ async function openSeededBoard() {
   })
   // Reveal Done (hidden by default, #38) so the column-layout assertions see the
   // full board shape.
-  await router.navigate({ to: '/projects/$slug', params: { slug }, search: { hideDone: false } })
+  await router.navigate({
+    to: '/projects/$slug',
+    params: { slug },
+    search: { hideDone: false }
+  })
   return { client, todo, doing }
 }
 
@@ -66,7 +88,9 @@ describe('project board', () => {
     await openSeededBoard()
     // Wait for the board to mount, then assert the full column order.
     await screen.findByRole('region', { name: 'To Do' })
-    const columns = screen.getAllByRole('region').map((el) => el.getAttribute('aria-label'))
+    const columns = screen
+      .getAllByRole('region')
+      .map(el => el.getAttribute('aria-label'))
     expect(columns).toEqual(['To Do', 'Doing', 'No status', 'Done'])
   })
 
@@ -97,7 +121,9 @@ describe('project board', () => {
     await setAxis(client, [doing, todo])
 
     await screen.findByRole('region', { name: 'Doing' })
-    const columns = screen.getAllByRole('region').map((el) => el.getAttribute('aria-label'))
+    const columns = screen
+      .getAllByRole('region')
+      .map(el => el.getAttribute('aria-label'))
     expect(columns).toEqual(['Doing', 'To Do', 'No status', 'Done'])
   })
 })

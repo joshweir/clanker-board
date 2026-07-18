@@ -1,6 +1,5 @@
 import { z } from '@hono/zod-openapi'
 import { beforeEach, describe, expect, test } from 'vitest'
-
 import { createApp } from '../app'
 import { createDb } from '../db/client'
 import { ErrorSchema, ProjectSchema } from './projects'
@@ -18,10 +17,11 @@ const createProject = async (body: unknown) =>
   app.request('/api/projects', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   })
 
-const parseProject = async (res: Response) => ProjectSchema.parse(await res.json())
+const parseProject = async (res: Response) =>
+  ProjectSchema.parse(await res.json())
 const parseError = async (res: Response) => ErrorSchema.parse(await res.json())
 
 describe('POST /api/projects', () => {
@@ -32,7 +32,7 @@ describe('POST /api/projects', () => {
     expect(project).toMatchObject({
       name: 'Demo Project',
       key: 'DEMO',
-      slug: 'demo',
+      slug: 'demo'
     })
     expect(project.id).toBeTypeOf('number')
     expect(project.createdAt).toBeTypeOf('string')
@@ -45,7 +45,7 @@ describe('POST /api/projects', () => {
     ['too short', 'A'],
     ['too long (11 chars)', 'ABCDEFGHIJK'],
     ['symbols', 'AB-C'],
-    ['empty', ''],
+    ['empty', '']
   ])('rejects invalid key (%s) with 400 and a message', async (_label, key) => {
     const res = await createProject({ name: 'Demo', key })
     expect(res.status).toBe(400)
@@ -75,7 +75,7 @@ describe('GET /api/projects', () => {
     expect(res.status).toBe(200)
     const projects = z.array(ProjectSchema).parse(await res.json())
     expect(projects).toHaveLength(2)
-    expect(projects.map((p) => p.slug)).toEqual(['alpha', 'beta'])
+    expect(projects.map(p => p.slug)).toEqual(['alpha', 'beta'])
   })
 
   test('returns empty array on a fresh instance', async () => {
@@ -90,7 +90,11 @@ describe('GET /api/projects/:slug', () => {
     await createProject({ name: 'Demo', key: 'DEMO' })
     const res = await app.request('/api/projects/demo')
     expect(res.status).toBe(200)
-    expect(await parseProject(res)).toMatchObject({ name: 'Demo', key: 'DEMO', slug: 'demo' })
+    expect(await parseProject(res)).toMatchObject({
+      name: 'Demo',
+      key: 'DEMO',
+      slug: 'demo'
+    })
   })
 
   test('404s for an unknown slug', async () => {
@@ -112,10 +116,14 @@ describe('PATCH /api/projects/:slug', () => {
     const res = await app.request('/api/projects/demo', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'New Name' }),
+      body: JSON.stringify({ name: 'New Name' })
     })
     expect(res.status).toBe(200)
-    expect(await parseProject(res)).toMatchObject({ name: 'New Name', key: 'DEMO', slug: 'demo' })
+    expect(await parseProject(res)).toMatchObject({
+      name: 'New Name',
+      key: 'DEMO',
+      slug: 'demo'
+    })
     const fetched = await parseProject(await app.request('/api/projects/demo'))
     expect(fetched.name).toBe('New Name')
   })
@@ -125,7 +133,7 @@ describe('PATCH /api/projects/:slug', () => {
     const res = await app.request('/api/projects/demo', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: '' }),
+      body: JSON.stringify({ name: '' })
     })
     expect(res.status).toBe(400)
   })
@@ -135,17 +143,20 @@ describe('PATCH /api/projects/:slug', () => {
     const res = await app.request('/api/projects/demo', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Renamed', key: 'OTHER' }),
+      body: JSON.stringify({ name: 'Renamed', key: 'OTHER' })
     })
     expect(res.status).toBe(200)
-    expect(await parseProject(res)).toMatchObject({ name: 'Renamed', key: 'DEMO' })
+    expect(await parseProject(res)).toMatchObject({
+      name: 'Renamed',
+      key: 'DEMO'
+    })
   })
 
   test('404s for an unknown slug', async () => {
     const res = await app.request('/api/projects/nope', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'X' }),
+      body: JSON.stringify({ name: 'X' })
     })
     expect(res.status).toBe(404)
   })
@@ -163,7 +174,9 @@ describe('DELETE /api/projects/:slug', () => {
   test('the key of a deleted project can be reused', async () => {
     await createProject({ name: 'First', key: 'DEMO' })
     await app.request('/api/projects/demo', { method: 'DELETE' })
-    expect((await createProject({ name: 'Second', key: 'DEMO' })).status).toBe(201)
+    expect((await createProject({ name: 'Second', key: 'DEMO' })).status).toBe(
+      201
+    )
   })
 
   test('404s for an unknown slug', async () => {
@@ -179,12 +192,12 @@ describe('API discovery', () => {
     const doc = z
       .object({
         info: z.object({ title: z.string() }),
-        paths: z.record(z.string(), z.unknown()),
+        paths: z.record(z.string(), z.unknown())
       })
       .parse(await res.json())
     expect(doc.info.title.length).toBeGreaterThan(0)
     expect(Object.keys(doc.paths)).toEqual(
-      expect.arrayContaining(['/api/projects', '/api/projects/{slug}']),
+      expect.arrayContaining(['/api/projects', '/api/projects/{slug}'])
     )
   })
 
