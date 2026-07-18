@@ -107,6 +107,27 @@ export const labels = sqliteTable(
   ],
 )
 
+// The Board is a stored view configuration (#24): exactly one per project, created
+// with the project. `column_axis` is an ordered list of label ids stored as JSON
+// text (parsed/validated with zod, never cast) that lays out the board's columns; a
+// PATCH replaces the whole axis and broadcasts board.changed so open boards
+// re-lay-out. The unique project_id enforces one board per project, and the
+// cascading foreign key drops the board when its project is deleted.
+export const boards = sqliteTable('boards', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  projectId: integer('project_id')
+    .notNull()
+    .unique()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  columnAxis: text('column_axis').notNull().default('[]'),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  updatedAt: text('updated_at')
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+})
+
 // Many-to-many attachment of labels to issues (#24): several labels per issue to
 // capture cross-cutting state. Both foreign keys cascade, so deleting an issue
 // drops its attachments and deleting a label detaches it from every issue. The

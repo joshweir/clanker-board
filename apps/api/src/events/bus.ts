@@ -1,4 +1,5 @@
 import type {
+  BoardSnapshot,
   CommentSnapshot,
   IssueSnapshot,
   LabelSnapshot,
@@ -26,6 +27,9 @@ export type ProjectEvent =
   // Comments are append-only (#24), so there is only a created event - an open
   // client appends the new comment by id without a reload.
   | { event: 'comment.created'; data: CommentSnapshot }
+  // The board's column_axis was replaced (#24): every open board re-lays-out from
+  // the snapshot's new axis.
+  | { event: 'board.changed'; data: BoardSnapshot }
 
 type Listener<T> = (message: T) => void
 
@@ -86,6 +90,9 @@ export function createEventBus() {
     },
     publishCommentCreated(projectId: number, comment: CommentSnapshot): void {
       projectChannel(projectId).publish({ event: 'comment.created', data: comment })
+    },
+    publishBoardChanged(projectId: number, board: BoardSnapshot): void {
+      projectChannel(projectId).publish({ event: 'board.changed', data: board })
     },
   }
 }
