@@ -4,6 +4,7 @@ import type { Db } from './db/client';
 import { createEventBus } from './events/bus';
 import { actorsRouter } from './routes/actors';
 import { boardRouter } from './routes/board';
+import { claimsRouter } from './routes/claims';
 import { commentsRouter } from './routes/comments';
 import { eventsRouter } from './routes/events';
 import { issuesRouter } from './routes/issues';
@@ -34,6 +35,7 @@ export function createApp(db: Db) {
   return app
     .route('/api', projectsRouter(db, bus))
     .route('/api', issuesRouter(db, bus))
+    .route('/api', claimsRouter(db, bus))
     .route('/api', labelsRouter(db, bus))
     .route('/api', relationshipsRouter(db, bus))
     .route('/api', commentsRouter(db, bus))

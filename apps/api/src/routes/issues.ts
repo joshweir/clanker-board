@@ -67,13 +67,30 @@ const PatchIssueSchema = createInsertSchema(issues, {
 
 const IssueParamSchema = SlugParamSchema.extend({ number: idParam('number') });
 
+// Server-side list filters so agents (and hooks, e.g. a session-end claim
+// release) can query without pulling the whole project: assignee ('unassigned'
+// or an actor id), the derived ready flag, a label name (case-insensitive), a
+// freeform type, and state. All optional and combinable (AND semantics).
+const ListIssuesQuerySchema = z.object({
+  assigneeId: z
+    .string()
+    .regex(/^(unassigned|[1-9]\d*)$/, 'must be "unassigned" or an actor id')
+    .optional()
+    .openapi({ example: 'unassigned' }),
+  ready: z.enum(['true', 'false']).optional().openapi({ example: 'true' }),
+  label: z.string().min(1).optional().openapi({ example: 'ready-for-agent' }),
+  type: z.string().min(1).optional().openapi({ example: 'task' }),
+  state: z.enum(['open', 'closed']).optional().openapi({ example: 'open' }),
+});
+
 const listIssuesRoute = createRoute({
   method: 'get',
   path: '/projects/{slug}/issues',
-  summary: "List a project's issues in rank order",
-  request: { params: SlugParamSchema },
+  summary: "List a project's issues in rank order (optionally filtered)",
+  request: { params: SlugParamSchema, query: ListIssuesQuerySchema },
   responses: {
     200: jsonBody(z.array(IssueSchema), 'The project issues, ordered by rank'),
+    400: jsonBody(ErrorSchema, 'Validation failure'),
     404: jsonBody(ErrorSchema, 'No project with this slug'),
   },
 });
@@ -150,16 +167,33 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
+      const query = c.req.valid('query');
       const rows = db
         .select()
         .from(issues)
         .where(eq(issues.projectId, project.id))
         .orderBy(asc(issues.rank), asc(issues.number))
         .all();
-      return c.json(
-        rows.map((row) => toIssue(db, row, project.key)),
-        200,
-      );
+      // Filter over the derived snapshots (ready/labels live there, not on the
+      // row) - same N+1 read path as the unfiltered list, fine at this scale.
+      const list = rows
+        .map((row) => toIssue(db, row, project.key))
+        .filter(
+          (issue) =>
+            (query.assigneeId === undefined ||
+              (query.assigneeId === 'unassigned'
+                ? issue.assigneeId === null
+                : issue.assigneeId === Number(query.assigneeId))) &&
+            (query.ready === undefined ||
+              issue.ready === (query.ready === 'true')) &&
+            (query.type === undefined || issue.type === query.type) &&
+            (query.state === undefined || issue.state === query.state) &&
+            (query.label === undefined ||
+              issue.labels.some(
+                (l) => l.name.toLowerCase() === query.label?.toLowerCase(),
+              )),
+        );
+      return c.json(list, 200);
     })
     .openapi(createIssueRoute, (c) => {
       const project = findProjectBySlug(db, c.req.valid('param').slug);
@@ -228,9 +262,17 @@ export function issuesRouter(db: Db, bus: EventBus) {
           return c.json({ error: `No actor with id ${patch.assigneeId}` }, 400);
         }
       }
+      const now = new Date().toISOString();
+      // claimedAt tracks when the CURRENT assignee was set, whatever the write
+      // path (claim endpoints or this PATCH), so lease staleness (routes/
+      // claims.ts) has one consistent meaning; unassigning clears it.
+      const claimPatch =
+        patch.assigneeId === undefined
+          ? {}
+          : { claimedAt: patch.assigneeId === null ? null : now };
       const row = db
         .update(issues)
-        .set({ ...patch, updatedAt: new Date().toISOString() })
+        .set({ ...patch, ...claimPatch, updatedAt: now })
         .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
         .returning()
         .get();

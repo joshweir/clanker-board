@@ -43,7 +43,7 @@ async function readBoardAxis(client: ApiClient): Promise<number[]> {
 
 async function readIssues(client: ApiClient) {
   const body = await (
-    await client.api.projects[':slug'].issues.$get({ param })
+    await client.api.projects[':slug'].issues.$get({ param, query: {} })
   ).json();
   if (!Array.isArray(body)) {
     throw new Error(`expected issues, got ${JSON.stringify(body)}`);

@@ -68,6 +68,10 @@ export const issues = sqliteTable(
     assigneeId: integer('assignee_id').references(() => actors.id, {
       onDelete: 'set null',
     }),
+    // When the current assignee was set (null when unassigned). Claims by agent
+    // actors are leases: a claim endpoint may steal one whose claimed_at is older
+    // than the TTL (routes/claims.ts), so a crashed session never wedges a ticket.
+    claimedAt: text('claimed_at'),
     // Single nullable parent (#30): work nests into a tree, an epic is just an
     // issue with children. Acyclicity is enforced at the API boundary. Deleting a
     // parent orphans its children (set null) rather than cascading the subtree; the

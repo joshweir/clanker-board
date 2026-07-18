@@ -21,6 +21,7 @@ const issue = (over: Partial<Issue> & Pick<Issue, 'id' | 'rank'>): Issue => ({
   body: '',
   state: 'open',
   assigneeId: null,
+  claimedAt: null,
   parentId: null,
   key: `DEMO-${over.id}`,
   labels: [],

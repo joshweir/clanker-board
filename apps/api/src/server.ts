@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp } from './app';
 import { resolveDbPath } from './db-path';
+import { ensureHumanActor } from './db/bootstrap';
 import { createDb } from './db/client';
 
 const dbPath = resolveDbPath();
@@ -13,7 +14,9 @@ const isProd = process.env.NODE_ENV === 'production';
 // Dev api 4711, prod api 4712 (#17), env-overridable; PORT=0 = ephemeral.
 const port = Number(process.env.PORT ?? (isProd ? 4712 : 4711));
 
-const app = createApp(createDb(dbPath));
+const db = createDb(dbPath);
+ensureHumanActor(db);
+const app = createApp(db);
 
 // Prod = single process: the api serves the built SPA. Dev keeps Vite (HMR +
 // proxy) as a separate process, so this is gated on NODE_ENV=production (#10/#17).

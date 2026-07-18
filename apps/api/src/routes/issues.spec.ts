@@ -220,6 +220,93 @@ describe('PATCH /api/projects/:slug/issues/:number', () => {
   });
 });
 
+describe('GET /api/projects/:slug/issues filters', () => {
+  beforeEach(async () => seedProject('DEMO'));
+
+  const listWith = async (qs: string) =>
+    z
+      .array(IssueSchema)
+      .parse(
+        await (await app.request(`/api/projects/demo/issues?${qs}`)).json(),
+      );
+
+  test('filters by assignee, type, state, and ready', async () => {
+    const actor = ActorSchema.parse(
+      await (
+        await app.request('/api/actors', {
+          method: 'POST',
+          ...json({ name: 'claude:a', kind: 'agent' }),
+        })
+      ).json(),
+    );
+    await createIssue('demo', { title: 'mine', type: 'task' });
+    await createIssue('demo', { title: 'free', type: 'chore' });
+    await createIssue('demo', { title: 'done', type: 'task' });
+    await patchIssue('demo', 1, { assigneeId: actor.id });
+    await patchIssue('demo', 3, { state: 'closed' });
+
+    expect(
+      (await listWith(`assigneeId=${actor.id}`)).map((i) => i.title),
+    ).toEqual(['mine']);
+    expect(
+      (await listWith('assigneeId=unassigned&state=open')).map((i) => i.title),
+    ).toEqual(['free']);
+    expect((await listWith('type=chore')).map((i) => i.title)).toEqual([
+      'free',
+    ]);
+    expect((await listWith('state=closed')).map((i) => i.title)).toEqual([
+      'done',
+    ]);
+    expect((await listWith('ready=true')).map((i) => i.title)).toEqual([
+      'mine',
+      'free',
+    ]);
+  });
+
+  test('filters by label name, case-insensitively', async () => {
+    await createIssue('demo', { title: 'tagged', type: 'task' });
+    await createIssue('demo', { title: 'plain', type: 'task' });
+    const label = (await (
+      await app.request('/api/projects/demo/labels', {
+        method: 'POST',
+        ...json({ name: 'ready-for-agent' }),
+      })
+    ).json()) as { id: number };
+    await app.request(`/api/projects/demo/issues/1/labels/${label.id}`, {
+      method: 'PUT',
+    });
+    expect(
+      (await listWith('label=Ready-For-Agent')).map((i) => i.title),
+    ).toEqual(['tagged']);
+  });
+
+  test('rejects a malformed assigneeId with 400', async () => {
+    expect(
+      (await app.request('/api/projects/demo/issues?assigneeId=bogus')).status,
+    ).toBe(400);
+  });
+
+  test('unassigning via PATCH clears claimedAt', async () => {
+    const actor = ActorSchema.parse(
+      await (
+        await app.request('/api/actors', {
+          method: 'POST',
+          ...json({ name: 'claude:a', kind: 'agent' }),
+        })
+      ).json(),
+    );
+    await createIssue('demo', { title: 'X', type: 'task' });
+    const assigned = await parseIssue(
+      await patchIssue('demo', 1, { assigneeId: actor.id }),
+    );
+    expect(assigned.claimedAt).not.toBeNull();
+    const released = await parseIssue(
+      await patchIssue('demo', 1, { assigneeId: null }),
+    );
+    expect(released.claimedAt).toBeNull();
+  });
+});
+
 describe('rank ordering', () => {
   test('lists issues in creation order by default', async () => {
     await seedProject('DEMO');

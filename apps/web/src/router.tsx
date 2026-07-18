@@ -66,7 +66,7 @@ const projectRoute = createRoute({
     const [boardRes, labelsRes, issuesRes, actorsRes] = await Promise.all([
       context.client.api.projects[':slug'].board.$get({ param }),
       context.client.api.projects[':slug'].labels.$get({ param }),
-      context.client.api.projects[':slug'].issues.$get({ param }),
+      context.client.api.projects[':slug'].issues.$get({ param, query: {} }),
       context.client.api.actors.$get(),
     ]);
     const board = await boardRes.json();
@@ -97,7 +97,7 @@ const projectIssuesRoute = createRoute({
   loader: async ({ context, params }) => {
     const param = { slug: params.slug };
     const [issuesRes, labelsRes, actorsRes] = await Promise.all([
-      context.client.api.projects[':slug'].issues.$get({ param }),
+      context.client.api.projects[':slug'].issues.$get({ param, query: {} }),
       context.client.api.projects[':slug'].labels.$get({ param }),
       context.client.api.actors.$get(),
     ]);

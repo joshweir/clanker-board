@@ -1,0 +1,1 @@
+ALTER TABLE `issues` ADD `claimed_at` text;

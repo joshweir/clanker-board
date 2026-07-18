@@ -72,6 +72,17 @@ const fail = (what: string, status: number): never => {
 };
 
 export async function seed(client: SeedClient): Promise<void> {
+  // The canonical human actor (mirrors server boot's ensureHumanActor): agents
+  // hand tickets back to a person by assigning the first kind='human' actor.
+  const actorsRes = await client.api.actors.$get();
+  if (actorsRes.status !== 200) return fail('list actors', actorsRes.status);
+  if (!(await actorsRes.json()).some((a) => a.kind === 'human')) {
+    const res = await client.api.actors.$post({
+      json: { name: 'Human', kind: 'human' },
+    });
+    if (res.status !== 201) fail('create human actor', res.status);
+  }
+
   // Project (stable key). The typed client proves this GET is 200 or 404, so a
   // rerun creating nothing is a no-op: create only when it reports 404.
   const existing = await client.api.projects[':slug'].$get({
@@ -104,6 +115,7 @@ export async function seed(client: SeedClient): Promise<void> {
   // (idempotent PUT) and close if needed (setting state=closed again is a no-op).
   const issueRes = await client.api.projects[':slug'].issues.$get({
     param: { slug: SLUG },
+    query: {},
   });
   if (issueRes.status !== 200) return fail('list issues', issueRes.status);
   const issueNumber = new Map(

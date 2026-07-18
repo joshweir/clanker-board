@@ -32,6 +32,7 @@ const issueSnapshot = z.object({
   state: z.enum(['open', 'closed']),
   rank: z.string(),
   assigneeId: z.number().nullable(),
+  claimedAt: z.string().nullable(),
   parentId: z.number().nullable(),
   key: z.string(),
   labels: z.array(labelSnapshot),

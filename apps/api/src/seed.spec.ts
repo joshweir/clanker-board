@@ -36,6 +36,7 @@ const counts = async (client: SeedClient) => {
     await (
       await client.api.projects[':slug'].issues.$get({
         param: { slug: SLUG },
+        query: {},
       })
     ).json(),
   );
@@ -76,6 +77,7 @@ describe('seed', () => {
       await (
         await client.api.projects[':slug'].issues.$get({
           param: { slug: SLUG },
+          query: {},
         })
       ).json(),
     );
