@@ -269,3 +269,211 @@ button.danger {
 .error {
   color: #c0392b;
 }
+
+/* Issue detail/create modal (#36): wider than the simple project modals, laid out
+   as a header + two columns (main / sidebar). */
+.issue-modal {
+  width: min(56rem, 100%);
+}
+
+.issue-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.issue-modal-header h2 {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+}
+
+.issue-type-badge {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: color-mix(in srgb, CanvasText 6%, Canvas);
+}
+
+.issue-modal-header-actions {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.issue-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 16rem;
+  gap: 1.5rem;
+}
+
+.issue-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.issue-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field > span {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.field input,
+.field select,
+.field textarea,
+.comment-composer textarea {
+  font: inherit;
+  padding: 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+  background: Canvas;
+  color: CanvasText;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: #b8860b;
+}
+
+.body-editor-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+}
+
+.body-editor-tabs button[aria-selected='true'] {
+  border-color: color-mix(in srgb, CanvasText 60%, transparent);
+  font-weight: 600;
+}
+
+.body-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.body-preview {
+  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  min-height: 4rem;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.md-heading {
+  font-weight: 700;
+  margin: 0.5rem 0;
+}
+
+.muted {
+  opacity: 0.6;
+}
+
+.label-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.label-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.15rem 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  font-size: 0.8rem;
+}
+
+.label-chip button {
+  padding: 0 0.35rem;
+  border: none;
+  background: transparent;
+  line-height: 1;
+}
+
+.blocker-status {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.comment-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.comment {
+  border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.comment-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-bottom: 0.25rem;
+}
+
+.comment-author {
+  font-weight: 600;
+}
+
+.comment-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.comment-composer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.new-issue {
+  margin-inline-start: auto;
+}

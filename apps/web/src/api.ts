@@ -27,3 +27,14 @@ export type Issue = InferResponseType<
   ApiClient['api']['projects'][':slug']['issues']['$get'],
   200
 >[number]
+
+// A comment is a flat, append-only, actor-attributed log entry (#31). The modal
+// lists them and appends new ones live off comment.created (#36).
+export type Comment = InferResponseType<
+  ApiClient['api']['projects'][':slug']['issues'][':number']['comments']['$get'],
+  200
+>[number]
+
+// Instance-level identities (#28), caller-asserted (no auth). The modal attributes
+// comments and the assignee to an actor.
+export type Actor = InferResponseType<ApiClient['api']['actors']['$get']>[number]
