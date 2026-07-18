@@ -12,3 +12,18 @@ export function createClient(fetchImpl?: typeof fetch): ApiClient {
 }
 
 export type Project = InferResponseType<ApiClient['api']['projects']['$get']>[number]
+
+// Per-project board data (#33). Second type arg pins the 200 body so the type is
+// the success shape, not the 200-or-404 union `.json()` would otherwise yield.
+export type Board = InferResponseType<
+  ApiClient['api']['projects'][':slug']['board']['$get'],
+  200
+>
+export type Label = InferResponseType<
+  ApiClient['api']['projects'][':slug']['labels']['$get'],
+  200
+>[number]
+export type Issue = InferResponseType<
+  ApiClient['api']['projects'][':slug']['issues']['$get'],
+  200
+>[number]
