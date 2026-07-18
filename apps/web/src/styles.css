@@ -465,8 +465,15 @@ button.danger {
 }
 
 .blocker-status {
-  margin: 0;
+  margin: 0 0 0.35rem;
   font-size: 0.85rem;
+}
+
+/* A closed blocker no longer blocks; its edge lingers until removed, shown muted
+   and struck through so it reads as satisfied rather than active. */
+.blocker-chip-closed span {
+  text-decoration: line-through;
+  opacity: 0.6;
 }
 
 .comment-list {

@@ -164,6 +164,47 @@ describe('issue modal', () => {
     });
   });
 
+  test('adding a blocker shows a removable chip (and flips the status)', async () => {
+    const { router, user } = await renderApp(async (client) => {
+      await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } });
+      const todo = await createLabel(client, 'To Do');
+      const first = await createIssue(client, 'Wire the board');
+      await createIssue(client, 'Ship the API');
+      await client.api.projects[':slug'].issues[':number'].labels[
+        ':labelId'
+      ].$put({
+        param: { slug, number: String(first), labelId: String(todo) },
+      });
+      await client.api.projects[':slug'].board.$patch({
+        param,
+        json: { columnAxis: [todo] },
+      });
+    });
+    await router.navigate({ to: '/projects/$slug', params: { slug } });
+    await user.click(await screen.findByText('Wire the board'));
+    await screen.findByLabelText('Title');
+    // Scope to the modal - the board's FilterBar also has Ready/Blocked controls.
+    const modal = within(screen.getByRole('dialog'));
+
+    // The open issue starts with no blockers.
+    expect(modal.getByText('Ready')).toBeDefined();
+
+    // Declare DEMO-2 as a blocker; the chip appears live off issue.changed - the
+    // feedback the status word alone could not give - and the status flips.
+    await user.selectOptions(modal.getByLabelText('Add a blocker'), '2');
+    expect(await modal.findByText('DEMO-2')).toBeDefined();
+    await modal.findByText('Blocked');
+
+    // The chip's × removes the edge; both the chip and the Blocked status clear.
+    await user.click(
+      modal.getByRole('button', { name: 'Remove blocker DEMO-2' }),
+    );
+    await waitFor(() => {
+      expect(modal.queryByText('DEMO-2')).toBeNull();
+    });
+    await modal.findByText('Ready');
+  });
+
   test('the header New issue button creates via the same modal', async () => {
     const { router, user } = await renderApp(async (client) => {
       await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } });

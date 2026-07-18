@@ -13,6 +13,15 @@ const labelSnapshot = z.object({
   updatedAt: z.string(),
 }) satisfies z.ZodType<Label>;
 
+// A blocker is a thin handle to the blocking issue (#30): enough to render a chip
+// and address the remove endpoint, not a full issue snapshot.
+const blockerSnapshot = z.object({
+  number: z.number(),
+  title: z.string(),
+  state: z.enum(['open', 'closed']),
+  key: z.string(),
+});
+
 const issueSnapshot = z.object({
   id: z.number(),
   projectId: z.number(),
@@ -26,6 +35,7 @@ const issueSnapshot = z.object({
   parentId: z.number().nullable(),
   key: z.string(),
   labels: z.array(labelSnapshot),
+  blockers: z.array(blockerSnapshot),
   blocked: z.boolean(),
   ready: z.boolean(),
   createdAt: z.string(),

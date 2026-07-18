@@ -22,6 +22,16 @@ export const IssueSchema = createSelectSchema(issues)
   .extend({
     key: z.string().openapi({ example: 'DEMO-1' }),
     labels: z.array(LabelSchema),
+    // The issue's declared blockers (#30): a thin handle per blocking issue, enough
+    // to render and remove it. Derived from the blocked-by edges: see toIssue.
+    blockers: z.array(
+      z.object({
+        number: z.number().openapi({ example: 2 }),
+        title: z.string().openapi({ example: 'Ship the API' }),
+        state: z.enum(['open', 'closed']).openapi({ example: 'open' }),
+        key: z.string().openapi({ example: 'DEMO-2' }),
+      }),
+    ),
     // Derived relationship state (#30), never stored: see toIssue.
     blocked: z.boolean().openapi({ example: false }),
     ready: z.boolean().openapi({ example: true }),

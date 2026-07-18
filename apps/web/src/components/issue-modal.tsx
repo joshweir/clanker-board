@@ -415,9 +415,27 @@ export function IssueModal({
     }
   };
 
+  const removeBlocker = (blockerNumber: number) => {
+    const param = issueParam();
+    if (param) {
+      void client.api.projects[':slug'].issues[':number']['blocked-by'][
+        ':blockerNumber'
+      ]
+        .$delete({ param: { ...param, blockerNumber: String(blockerNumber) } })
+        .then(relationshipError('Could not remove the blocker.'));
+    }
+  };
+
   const attachedIds = new Set((current?.labels ?? []).map((l) => l.id));
   const availableLabels = labels.filter((l) => !attachedIds.has(l.id));
   const candidateIssues = issues.filter((i) => !current || i.id !== current.id);
+  // Don't offer an already-declared blocker again (mirrors availableLabels).
+  const blockerNumbers = new Set(
+    (current?.blockers ?? []).map((b) => b.number),
+  );
+  const blockerCandidates = candidateIssues.filter(
+    (i) => !blockerNumbers.has(i.number),
+  );
   const parent = current
     ? issues.find((i) => i.id === current.parentId)
     : undefined;
@@ -674,7 +692,7 @@ export function IssueModal({
             </label>
 
             <div className="field">
-              <span>Blockers</span>
+              <span id={`${headingId}-blockers`}>Blockers</span>
               <p className="blocker-status">
                 {current.blocked
                   ? 'Blocked'
@@ -682,25 +700,53 @@ export function IssueModal({
                     ? 'Ready'
                     : 'No open blockers'}
               </p>
-              {/* ponytail: the issue read model exposes blocked/ready but not the
-                  blocker list (#30), so this can only add a blocker, not list or
-                  remove existing ones. Add a GET blockers endpoint to enumerate. */}
-              <select
-                aria-label="Add a blocker"
-                value=""
-                onChange={(e) => {
-                  if (e.target.value !== '') {
-                    addBlocker(Number(e.target.value));
-                  }
-                }}
+              {/* The blocker list is many-to-many (#30): each declared blocker is a
+                  removable chip, so adding one gives immediate feedback (it converges
+                  in via issue.changed) and every blocker can be listed and removed. A
+                  closed blocker is struck through - it no longer blocks but the edge
+                  stands until removed. */}
+              <ul
+                className="label-chips"
+                aria-labelledby={`${headingId}-blockers`}
               >
-                <option value="">Add a blocker…</option>
-                {candidateIssues.map((i) => (
-                  <option key={i.id} value={i.number}>
-                    {i.key} {i.title}
-                  </option>
+                {current.blockers.map((blocker) => (
+                  <li
+                    key={blocker.number}
+                    className={
+                      blocker.state === 'closed'
+                        ? 'label-chip blocker-chip-closed'
+                        : 'label-chip'
+                    }
+                  >
+                    <span title={blocker.title}>{blocker.key}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove blocker ${blocker.key}`}
+                      onClick={() => removeBlocker(blocker.number)}
+                    >
+                      ×
+                    </button>
+                  </li>
                 ))}
-              </select>
+              </ul>
+              {blockerCandidates.length > 0 ? (
+                <select
+                  aria-label="Add a blocker"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value !== '') {
+                      addBlocker(Number(e.target.value));
+                    }
+                  }}
+                >
+                  <option value="">Add a blocker…</option>
+                  {blockerCandidates.map((i) => (
+                    <option key={i.id} value={i.number}>
+                      {i.key} {i.title}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
             </div>
           </aside>
         </div>

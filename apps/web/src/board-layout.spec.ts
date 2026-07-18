@@ -24,6 +24,7 @@ const issue = (over: Partial<Issue> & Pick<Issue, 'id' | 'rank'>): Issue => ({
   parentId: null,
   key: `DEMO-${over.id}`,
   labels: [],
+  blockers: [],
   blocked: false,
   ready: true,
   createdAt: '2026-01-01T00:00:00.000Z',
