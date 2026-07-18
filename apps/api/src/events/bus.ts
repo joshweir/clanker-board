@@ -1,4 +1,9 @@
-import type { IssueSnapshot, LabelSnapshot, ProjectSnapshot } from '../db/queries'
+import type {
+  CommentSnapshot,
+  IssueSnapshot,
+  LabelSnapshot,
+  ProjectSnapshot,
+} from '../db/queries'
 
 // Coarse entity-snapshot events (#6/#18): the client upserts by id, so redelivery
 // is idempotent. project.deleted carries only the id (there is no snapshot left).
@@ -18,6 +23,9 @@ export type ProjectEvent =
   | { event: 'issue.deleted'; data: { id: number; number: number } }
   | { event: 'label.changed'; data: LabelSnapshot }
   | { event: 'label.deleted'; data: { id: number } }
+  // Comments are append-only (#24), so there is only a created event - an open
+  // client appends the new comment by id without a reload.
+  | { event: 'comment.created'; data: CommentSnapshot }
 
 type Listener<T> = (message: T) => void
 
@@ -75,6 +83,9 @@ export function createEventBus() {
     },
     publishLabelDeleted(projectId: number, id: number): void {
       projectChannel(projectId).publish({ event: 'label.deleted', data: { id } })
+    },
+    publishCommentCreated(projectId: number, comment: CommentSnapshot): void {
+      projectChannel(projectId).publish({ event: 'comment.created', data: comment })
     },
   }
 }

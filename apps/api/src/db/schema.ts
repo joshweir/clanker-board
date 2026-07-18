@@ -141,3 +141,23 @@ export const issueBlockedBy = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.issueId, table.blockerId] })],
 )
+
+// Discussion on an issue (#24): a flat, append-only, actor-attributed log - no
+// edit/delete, so there is no updatedAt. Deleting the issue (or, via issues, the
+// whole project) cascade-deletes its comments. actor_id is required and validated
+// at the API boundary; actors are never deleted (no delete route), so a plain
+// reference suffices with no onDelete policy.
+export const comments = sqliteTable('comments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  issueId: integer('issue_id')
+    .notNull()
+    .references(() => issues.id, { onDelete: 'cascade' }),
+  actorId: integer('actor_id')
+    .notNull()
+    .references(() => actors.id),
+  // Freeform markdown body (#24), rendered client-side.
+  body: text('body').notNull(),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+})
