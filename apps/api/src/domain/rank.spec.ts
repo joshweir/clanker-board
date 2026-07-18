@@ -21,8 +21,9 @@ describe('rankAfter', () => {
     expect([...ranks].sort()).toEqual(ranks)
   })
 
-  test('extends length once the final digit is exhausted', () => {
-    // 'z' is the maximum digit; the next rank must still sort after it.
-    expect(rankAfter('z') > 'z').toBe(true)
+  test('extends length across a digit-place boundary, staying ordered', () => {
+    // 'az' ends the two-char integer range; the next rank rolls to 'b00' and must
+    // still sort strictly after it (byte-wise), never colliding.
+    expect(rankAfter('az') > 'az').toBe(true)
   })
 })

@@ -1,9 +1,15 @@
 import type { Issue, Label } from './api'
 
+export type ColumnKind = 'axis' | 'no-status' | 'done'
+
 export interface BoardColumn {
   // Stable React key: label-<id> for axis columns, plus the two virtual columns.
   key: string
   title: string
+  // The axis label bound to this column (axis columns only); null for the two
+  // virtual columns. A drop reads this to swap the card's axis label (#34).
+  labelId: number | null
+  kind: ColumnKind
   cards: Issue[]
 }
 
@@ -18,10 +24,12 @@ export function layoutBoard(columnAxis: number[], labels: Label[], issues: Issue
   const axisColumns: BoardColumn[] = columnAxis.map((id) => ({
     key: `label-${id}`,
     title: labelName.get(id) ?? `Label ${id}`,
+    labelId: id,
+    kind: 'axis',
     cards: [],
   }))
-  const noStatus: BoardColumn = { key: 'no-status', title: 'No status', cards: [] }
-  const done: BoardColumn = { key: 'done', title: 'Done', cards: [] }
+  const noStatus: BoardColumn = { key: 'no-status', title: 'No status', labelId: null, kind: 'no-status', cards: [] }
+  const done: BoardColumn = { key: 'done', title: 'Done', labelId: null, kind: 'done', cards: [] }
 
   for (const issue of issues) {
     if (issue.state === 'closed') {
@@ -36,7 +44,11 @@ export function layoutBoard(columnAxis: number[], labels: Label[], issues: Issue
 
   const columns = [...axisColumns, noStatus, done]
   for (const column of columns) {
-    column.cards.sort((a, b) => a.rank.localeCompare(b.rank) || a.id - b.id)
+    // Byte-wise rank compare, not localeCompare: fractional-indexing keys sort by
+    // raw code point (matching the server's SQLite BINARY collation), and
+    // localeCompare would reorder mixed-case keys like 'Zz' vs 'a0'. id tiebreak
+    // keeps order deterministic when two concurrent moves land the same rank (#34).
+    column.cards.sort((a, b) => (a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : a.id - b.id))
   }
   return columns
 }

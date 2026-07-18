@@ -80,12 +80,37 @@ body {
   border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
   border-radius: 0.4rem;
   background: Canvas;
+  cursor: grab;
+}
+
+.board-card.dragging {
+  cursor: grabbing;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-color: color-mix(in srgb, CanvasText 40%, transparent);
+}
+
+.board-card:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
 }
 
 .board-card-key {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
   opacity: 0.7;
+}
+
+.toast {
+  position: fixed;
+  inset-block-end: 1.5rem;
+  inset-inline-end: 1.5rem;
+  max-width: 22rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #c0392b;
+  background: Canvas;
+  color: #c0392b;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .projects-header {

@@ -11,9 +11,15 @@ import { createAppRouter } from '../router'
 // wiring the hc client's fetch straight to app.request. No network, no mocks -
 // the exact zod-openapi contract the browser and agents consume. `seed` runs
 // before mount so the root loader sees pre-existing projects.
-export async function renderApp(seed?: (client: ApiClient) => Promise<void>) {
+export async function renderApp(
+  seed?: (client: ApiClient) => Promise<void>,
+  // Optionally decorate the transport (e.g. to inject a server rejection) so tests
+  // can drive the optimistic revert path (#34) without mocking the api itself.
+  wrapFetch?: (base: typeof fetch) => typeof fetch,
+) {
   const app = createApp(createDb(':memory:'))
-  const fetchImpl: typeof fetch = async (input, init) => app.request(input, init)
+  const base: typeof fetch = async (input, init) => app.request(input, init)
+  const fetchImpl = wrapFetch ? wrapFetch(base) : base
   const client = createClient(fetchImpl)
   if (seed) {
     await seed(client)
