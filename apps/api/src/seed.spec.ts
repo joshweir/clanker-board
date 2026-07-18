@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { z } from '@hono/zod-openapi';
 import { hc } from 'hono/client';
 import { describe, expect, test } from 'vitest';
@@ -93,4 +94,26 @@ describe('seed', () => {
     const second = await counts(client);
     expect(second).toEqual(first);
   });
+
+  // Data-loss trust boundary: `main()` must refuse to seed a production db. Drive
+  // the real entrypoint (as `pnpm seed` does) with NODE_ENV=production; the guard
+  // fires before any db is opened, so DATABASE_PATH=:memory: is belt-and-braces.
+  test('the entrypoint refuses to run against a production database', () => {
+    let error: { status?: number; stderr?: string } | undefined;
+    try {
+      execFileSync(process.execPath, ['--import', 'tsx', 'src/seed.ts'], {
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          DATABASE_PATH: ':memory:',
+        },
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (e) {
+      error = e as { status?: number; stderr?: string };
+    }
+    expect(error?.status).toBe(1);
+    expect(error?.stderr ?? '').toContain('dev-only');
+  }, 30_000);
 });

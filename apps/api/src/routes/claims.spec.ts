@@ -192,6 +192,19 @@ describe('POST /api/projects/:slug/issues/claim-next', () => {
     expect((await claimNext({ actorId: agent.id })).status).toBe(404);
   });
 
+  test('400s for an unknown actor, 404s for an unknown project', async () => {
+    const agent = await createActor('claude:a');
+    expect((await claimNext({ actorId: 999 })).status).toBe(400);
+    expect(
+      (
+        await app.request('/api/projects/nope/issues/claim-next', {
+          method: 'POST',
+          ...json({ actorId: agent.id }),
+        })
+      ).status,
+    ).toBe(404);
+  });
+
   test('filters by type and label (case-insensitive)', async () => {
     await createIssue('A chore', 'chore');
     await createIssue('A task', 'task');

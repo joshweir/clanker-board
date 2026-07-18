@@ -210,6 +210,18 @@ describe('attach / detach labels to issues', () => {
   test('attach 404s for an unknown label', async () => {
     expect((await attach('demo', 1, 999)).status).toBe(404);
   });
+
+  test.each([
+    ['unknown project', 'nope', 1],
+    ['unknown issue', 'demo', 99],
+  ])('detach 404s for %s', async (_label, slug, number) => {
+    const a = await parseLabel(await createLabel('demo', 'alpha'));
+    expect((await detach(slug, number, a.id)).status).toBe(404);
+  });
+
+  test('detach 404s for an unknown label', async () => {
+    expect((await detach('demo', 1, 999)).status).toBe(404);
+  });
 });
 
 describe('cascade behaviour', () => {

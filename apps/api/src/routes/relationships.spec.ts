@@ -130,6 +130,18 @@ describe('parent tree', () => {
     ).toBe(204);
     expect((await getIssue('demo', 2)).parentId).toBeNull();
   });
+
+  test('clearing a parent 404s for an unknown project or issue', async () => {
+    await seed(1);
+    expect((await clearParent('nope', 1)).status).toBe(404);
+    expect((await clearParent('demo', 99)).status).toBe(404);
+  });
+
+  test('clearing a parent that is not set is a 200 no-op', async () => {
+    await seed(1);
+    const cleared = await parseIssue(await clearParent('demo', 1));
+    expect(cleared.parentId).toBeNull();
+  });
 });
 
 describe('blocking DAG and derived state', () => {
@@ -221,6 +233,19 @@ describe('blocking DAG and derived state', () => {
     expect((await block('nope', 1, 1)).status).toBe(404);
     expect((await block('demo', 99, 1)).status).toBe(404);
     expect((await block('demo', 1, 99)).status).toBe(404);
+  });
+
+  test('unblock 404s for unknown project, issue, or blocker', async () => {
+    await seed(2);
+    expect((await unblock('nope', 1, 2)).status).toBe(404);
+    expect((await unblock('demo', 99, 2)).status).toBe(404);
+    expect((await unblock('demo', 1, 99)).status).toBe(404);
+  });
+
+  test('removing an edge that was never declared is a 200 no-op', async () => {
+    await seed(2);
+    const issue = await parseIssue(await unblock('demo', 1, 2));
+    expect(issue).toMatchObject({ blocked: false, ready: true });
   });
 
   test('deleting a blocker removes the edge (dependent becomes ready)', async () => {

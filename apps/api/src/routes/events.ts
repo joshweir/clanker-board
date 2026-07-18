@@ -50,8 +50,16 @@ export function eventsRouter(db: Db, bus: EventBus) {
               data: JSON.stringify(message.data),
             });
           });
-          stream.onAbort(unsubscribe);
-          await new Promise<void>((resolve) => stream.onAbort(resolve));
+          // End the stream on client abort OR when the project is deleted (its
+          // channel closes) - otherwise a deleted project's stream hangs open.
+          await new Promise<void>((resolve) => {
+            const stop = () => {
+              unsubscribe();
+              resolve();
+            };
+            stream.onAbort(stop);
+            channel.onClose(stop);
+          });
         });
       })
   );

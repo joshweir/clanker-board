@@ -115,4 +115,30 @@ describe('GET /api/projects/:slug/events (per-project stream)', () => {
     const res = await app.request('/api/projects/nope/events');
     expect(res.status).toBe(404);
   });
+
+  test('ends an open stream when its project is deleted (no orphaned stream)', async () => {
+    await createProject({ name: 'Doomed', key: 'DOOM' });
+    const controller = new AbortController();
+    const res = await app.request('/api/projects/doom/events', {
+      signal: controller.signal,
+    });
+    expect(res.status).toBe(200);
+    const events = readEvents(res);
+
+    await app.request('/api/projects/doom', { method: 'DELETE' });
+
+    // The generator completes (stream closed server-side) rather than hanging.
+    const ended = await Promise.race([
+      events.next(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('stream did not end on delete')),
+          2000,
+        ),
+      ),
+    ]);
+    expect(ended.done).toBe(true);
+
+    controller.abort();
+  });
 });

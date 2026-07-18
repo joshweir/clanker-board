@@ -218,6 +218,10 @@ describe('PATCH /api/projects/:slug/issues/:number', () => {
   test('404s for an unknown issue', async () => {
     expect((await patchIssue('demo', 99, { title: 'X' })).status).toBe(404);
   });
+
+  test('404s for an unknown project', async () => {
+    expect((await patchIssue('nope', 1, { title: 'X' })).status).toBe(404);
+  });
 });
 
 describe('GET /api/projects/:slug/issues filters', () => {
@@ -376,6 +380,13 @@ describe('DELETE /api/projects/:slug/issues/:number', () => {
   test('404s for an unknown issue', async () => {
     expect(
       (await app.request('/api/projects/demo/issues/99', { method: 'DELETE' }))
+        .status,
+    ).toBe(404);
+  });
+
+  test('404s for an unknown project', async () => {
+    expect(
+      (await app.request('/api/projects/nope/issues/1', { method: 'DELETE' }))
         .status,
     ).toBe(404);
   });

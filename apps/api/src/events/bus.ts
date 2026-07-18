@@ -37,6 +37,7 @@ type Listener<T> = (message: T) => void;
 // casts to type payloads). Single process, in-memory: one Channel per topic.
 class Channel<T> {
   private readonly listeners = new Set<Listener<T>>();
+  private readonly closers = new Set<() => void>();
 
   subscribe(listener: Listener<T>): () => void {
     this.listeners.add(listener);
@@ -49,6 +50,25 @@ class Channel<T> {
     for (const listener of this.listeners) {
       listener(message);
     }
+  }
+
+  // Run `handler` when the channel is closed (its project was deleted). Returns
+  // an unregister fn so a stream that aborts first drops its teardown.
+  onClose(handler: () => void): () => void {
+    this.closers.add(handler);
+    return () => {
+      this.closers.delete(handler);
+    };
+  }
+
+  // Close the channel: fire every teardown (open SSE streams end cleanly) and
+  // drop all listeners, so a deleted project's stream never hangs orphaned.
+  close(): void {
+    for (const handler of this.closers) {
+      handler();
+    }
+    this.closers.clear();
+    this.listeners.clear();
   }
 }
 
@@ -74,6 +94,10 @@ export function createEventBus() {
     },
     publishProjectDeleted(id: number): void {
       instance.publish({ event: 'project.deleted', data: { id } });
+      // Close the project's channel so any open per-project SSE stream ends
+      // instead of hanging forever, then drop it (a re-created project gets a
+      // fresh channel on next publish/subscribe).
+      projectChannels.get(id)?.close();
       projectChannels.delete(id);
     },
     publishIssueChanged(projectId: number, issue: IssueSnapshot): void {

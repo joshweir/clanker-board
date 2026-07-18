@@ -12,7 +12,7 @@
     "seed": "tsx src/seed.ts",
     "start": "node --import tsx src/server.ts",
     "db:generate": "drizzle-kit generate",
-    "test": "vitest run"
+    "test": "vitest run --coverage"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.10",
