@@ -1,7 +1,7 @@
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm'
 
 import type { Db } from './client'
-import { issueLabels, issues, labels, projects } from './schema'
+import { issueBlockedBy, issueLabels, issues, labels, projects } from './schema'
 
 type ProjectRow = typeof projects.$inferSelect
 type IssueRow = typeof issues.$inferSelect
@@ -34,14 +34,47 @@ export const findProjectBySlug = (db: Db, slug: string) =>
     .where(sql`lower(${projects.key}) = ${slug}`)
     .get()
 
+// The states of an issue's blockers, powering the derived blocked/ready flags
+// (#30). Only the state matters, so we project it and skip the rest of the row.
+export const blockerStatesForIssue = (db: Db, issueId: number): IssueRow['state'][] =>
+  db
+    .select({ state: issues.state })
+    .from(issues)
+    .innerJoin(issueBlockedBy, eq(issueBlockedBy.blockerId, issues.id))
+    .where(eq(issueBlockedBy.issueId, issueId))
+    .all()
+    .map((r) => r.state)
+
+// The issues blocked by a given issue - its dependents. When a blocker's state
+// flips, every dependent's derived blocked/ready changes, so the caller re-publishes
+// them so open clients converge (#30), mirroring the label re-publish pattern.
+export const dependentsOf = (db: Db, blockerId: number): IssueRow[] =>
+  db
+    .select(getTableColumns(issues))
+    .from(issues)
+    .innerJoin(issueBlockedBy, eq(issueBlockedBy.issueId, issues.id))
+    .where(eq(issueBlockedBy.blockerId, blockerId))
+    .all()
+
 // KEY-N is the stable, human-facing handle (#18): project key + per-project
-// number, derived from the row, never stored. Issue reads include their attached
-// labels (#24). Shared by the issue routes and the per-project SSE payloads.
-export const toIssue = (row: IssueRow, projectKey: string, attachedLabels: LabelSnapshot[]) => ({
-  ...row,
-  key: `${projectKey}-${row.number}`,
-  labels: attachedLabels,
-})
+// number, derived from the row, never stored. Issue reads embed their attached
+// labels (#24) and expose derived relationship state (#30): `blocked` (open with an
+// open blocker) and `ready`/frontier (open with every blocker closed), so agents
+// can find the next actionable work. Derivation lives here so every read path -
+// routes and SSE snapshots - stays consistent and can never forget it. Two small
+// per-issue queries (labels + blocker states) run per call, so a list read is N+1;
+// fine at this scale (single-process SQLite) - fold into a join if lists grow hot.
+export const toIssue = (db: Db, row: IssueRow, projectKey: string) => {
+  const open = row.state === 'open'
+  const anyBlockerOpen = blockerStatesForIssue(db, row.id).some((state) => state === 'open')
+  return {
+    ...row,
+    key: `${projectKey}-${row.number}`,
+    labels: labelsForIssue(db, row.id),
+    blocked: open && anyBlockerOpen,
+    ready: open && !anyBlockerOpen,
+  }
+}
 
 export type IssueSnapshot = ReturnType<typeof toIssue>
 

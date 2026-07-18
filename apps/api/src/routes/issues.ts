@@ -3,19 +3,25 @@ import { and, asc, eq, max } from 'drizzle-orm'
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 
 import type { Db } from '../db/client'
-import { findIssue, findProjectBySlug, labelsForIssue, toIssue } from '../db/queries'
+import { dependentsOf, findIssue, findProjectBySlug, toIssue } from '../db/queries'
 import { actors, issues } from '../db/schema'
 import { rankAfter } from '../domain/rank'
 import type { EventBus } from '../events/bus'
 import { LabelSchema } from './labels'
-import { jsonBody } from './openapi'
+import { idParam, jsonBody, SlugParamSchema } from './openapi'
 import { ErrorSchema } from './projects'
 
 // drizzle-zod derives the base schema from the Drizzle table (#14); the route adds
 // the derived KEY-N handle (project key + per-project number, never stored - #18)
 // and the issue's attached labels (#24).
 export const IssueSchema = createSelectSchema(issues)
-  .extend({ key: z.string().openapi({ example: 'DEMO-1' }), labels: z.array(LabelSchema) })
+  .extend({
+    key: z.string().openapi({ example: 'DEMO-1' }),
+    labels: z.array(LabelSchema),
+    // Derived relationship state (#30), never stored: see toIssue.
+    blocked: z.boolean().openapi({ example: false }),
+    ready: z.boolean().openapi({ example: true }),
+  })
   .openapi('Issue')
 
 const CreateIssueSchema = createInsertSchema(issues, {
@@ -38,17 +44,7 @@ const PatchIssueSchema = createInsertSchema(issues, {
   .partial()
   .openapi('PatchIssue')
 
-const SlugParamSchema = z.object({
-  slug: z.string().openapi({ param: { name: 'slug', in: 'path' }, example: 'demo' }),
-})
-
-const IssueParamSchema = SlugParamSchema.extend({
-  number: z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name: 'number', in: 'path' }, example: 1 }),
-})
+const IssueParamSchema = SlugParamSchema.extend({ number: idParam('number') })
 
 const listIssuesRoute = createRoute({
   method: 'get',
@@ -134,7 +130,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
         .orderBy(asc(issues.rank), asc(issues.number))
         .all()
       return c.json(
-        rows.map((row) => toIssue(row, project.key, labelsForIssue(db, row.id))),
+        rows.map((row) => toIssue(db, row, project.key)),
         200,
       )
     })
@@ -159,8 +155,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
         .values({ projectId: project.id, number, title, type, body: body ?? '', rank })
         .returning()
         .get()
-      // A brand-new issue has no labels yet.
-      const issue = toIssue(row, project.key, [])
+      // A brand-new issue has no labels, no parent, and no blockers (ready).
+      const issue = toIssue(db, row, project.key)
       bus.publishIssueChanged(project.id, issue)
       return c.json(issue, 201)
     })
@@ -174,7 +170,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404)
       }
-      return c.json(toIssue(row, project.key, labelsForIssue(db, row.id)), 200)
+      return c.json(toIssue(db, row, project.key), 200)
     })
     .openapi(patchIssueRoute, (c) => {
       const { slug, number } = c.req.valid('param')
@@ -203,8 +199,15 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404)
       }
-      const issue = toIssue(row, project.key, labelsForIssue(db, row.id))
+      const issue = toIssue(db, row, project.key)
       bus.publishIssueChanged(project.id, issue)
+      // A state change flips every dependent's derived blocked/ready, so re-publish
+      // them too and open clients converge (#30), mirroring the label re-publish.
+      if (patch.state !== undefined) {
+        for (const dependent of dependentsOf(db, row.id)) {
+          bus.publishIssueChanged(project.id, toIssue(db, dependent, project.key))
+        }
+      }
       return c.json(issue, 200)
     })
     .openapi(deleteIssueRoute, (c) => {
