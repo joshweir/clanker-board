@@ -1,4 +1,4 @@
-import type { ProjectSnapshot } from '../db/queries'
+import type { IssueSnapshot, ProjectSnapshot } from '../db/queries'
 
 // Coarse entity-snapshot events (#6/#18): the client upserts by id, so redelivery
 // is idempotent. project.deleted carries only the id (there is no snapshot left).
@@ -6,13 +6,12 @@ export type InstanceEvent =
   | { event: 'project.changed'; data: ProjectSnapshot }
   | { event: 'project.deleted'; data: { id: number } }
 
-// Per-project events (issue.changed, board.changed, ...) land in later tickets;
-// the channel exists now so the per-project stream is wired end to end (#27).
-// ponytail: data is unknown until those event types exist; tighten to a union then.
-export interface ProjectEvent {
-  event: string
-  data: unknown
-}
+// Per-project events land on a project's channel. issue.changed carries the full
+// snapshot (client upserts by id); issue.deleted carries the id + KEY-N number so
+// a listener can drop the card without a snapshot. board.changed etc. join here.
+export type ProjectEvent =
+  | { event: 'issue.changed'; data: IssueSnapshot }
+  | { event: 'issue.deleted'; data: { id: number; number: number } }
 
 type Listener<T> = (message: T) => void
 
@@ -58,6 +57,12 @@ export function createEventBus() {
     publishProjectDeleted(id: number): void {
       instance.publish({ event: 'project.deleted', data: { id } })
       projectChannels.delete(id)
+    },
+    publishIssueChanged(projectId: number, issue: IssueSnapshot): void {
+      projectChannel(projectId).publish({ event: 'issue.changed', data: issue })
+    },
+    publishIssueDeleted(projectId: number, id: number, number: number): void {
+      projectChannel(projectId).publish({ event: 'issue.deleted', data: { id, number } })
     },
   }
 }
