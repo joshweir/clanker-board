@@ -4,7 +4,7 @@ import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 
 import type { Db } from '../db/client'
 import { findProjectBySlug, toProject } from '../db/queries'
-import { projects } from '../db/schema'
+import { boards, projects } from '../db/schema'
 import type { EventBus } from '../events/bus'
 import { jsonBody } from './openapi'
 
@@ -116,7 +116,15 @@ export function projectsRouter(db: Db, bus: EventBus) {
       if (findProjectBySlug(db, key.toLowerCase())) {
         return c.json({ error: `A project with key "${key}" already exists` }, 409)
       }
-      const row = db.insert(projects).values({ key, name }).returning().get()
+      // Every project owns exactly one board, created here so a board is always
+      // available (#24); its column_axis starts empty (the '[]' column default).
+      // One transaction keeps the invariant atomic: a project is never persisted
+      // without its board (and vice-versa) even if the second insert fails.
+      const row = db.transaction((tx) => {
+        const created = tx.insert(projects).values({ key, name }).returning().get()
+        tx.insert(boards).values({ projectId: created.id }).run()
+        return created
+      })
       const project = toProject(row)
       bus.publishProjectChanged(project)
       return c.json(project, 201)

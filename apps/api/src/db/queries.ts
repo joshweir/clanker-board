@@ -1,7 +1,8 @@
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm'
+import { z } from 'zod'
 
 import type { Db } from './client'
-import { comments, issueBlockedBy, issueLabels, issues, labels, projects } from './schema'
+import { boards, comments, issueBlockedBy, issueLabels, issues, labels, projects } from './schema'
 
 type ProjectRow = typeof projects.$inferSelect
 type IssueRow = typeof issues.$inferSelect
@@ -91,6 +92,28 @@ export const commentsForIssue = (db: Db, issueId: number): CommentSnapshot[] =>
     .where(eq(comments.issueId, issueId))
     .orderBy(asc(comments.createdAt), asc(comments.id))
     .all()
+
+// column_axis is stored as JSON text (#24) and parsed with zod here - never cast
+// (CLAUDE.md). Ids are positive integers (label ids); the schema also guards the
+// storage layer against a malformed stored value.
+export const ColumnAxisSchema = z.array(z.number().int().positive())
+
+// A board snapshot exposes column_axis as a parsed number[] (the stored JSON text
+// is an internal detail). Shared by the board routes and the board.changed SSE
+// payload, so every read path parses the axis the same way.
+export type BoardSnapshot = Omit<typeof boards.$inferSelect, 'columnAxis'> & {
+  columnAxis: number[]
+}
+
+export const toBoard = (row: typeof boards.$inferSelect): BoardSnapshot => ({
+  ...row,
+  columnAxis: ColumnAxisSchema.parse(JSON.parse(row.columnAxis)),
+})
+
+// A project has exactly one board (unique project_id), auto-created with the
+// project. Shared by the board routes.
+export const findBoard = (db: Db, projectId: number) =>
+  db.select().from(boards).where(eq(boards.projectId, projectId)).get()
 
 export const findIssue = (db: Db, projectId: number, number: number) =>
   db

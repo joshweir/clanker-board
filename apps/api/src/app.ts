@@ -4,6 +4,7 @@ import { Scalar } from '@scalar/hono-api-reference'
 import type { Db } from './db/client'
 import { createEventBus } from './events/bus'
 import { actorsRouter } from './routes/actors'
+import { boardRouter } from './routes/board'
 import { commentsRouter } from './routes/comments'
 import { eventsRouter } from './routes/events'
 import { issuesRouter } from './routes/issues'
@@ -36,6 +37,7 @@ export function createApp(db: Db) {
     .route('/api', labelsRouter(db, bus))
     .route('/api', relationshipsRouter(db, bus))
     .route('/api', commentsRouter(db, bus))
+    .route('/api', boardRouter(db, bus))
     .route('/api', actorsRouter(db))
     .route('/api', eventsRouter(db, bus))
     .get('/docs', Scalar({ url: '/openapi.json' }))
