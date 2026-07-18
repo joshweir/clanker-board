@@ -1,5 +1,4 @@
-import { mkdirSync } from 'node:fs'
-import { dirname, relative } from 'node:path'
+import { relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { serve } from '@hono/node-server'
@@ -7,10 +6,9 @@ import { serveStatic } from '@hono/node-server/serve-static'
 
 import { createApp } from './app'
 import { createDb } from './db/client'
+import { resolveDbPath } from './db-path'
 
-const defaultDbPath = fileURLToPath(new URL('../data/clanker-board.db', import.meta.url))
-const dbPath = process.env.DATABASE_PATH ?? defaultDbPath
-mkdirSync(dirname(dbPath), { recursive: true })
+const dbPath = resolveDbPath()
 
 const isProd = process.env.NODE_ENV === 'production'
 

@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "dev": "tsx watch src/server.ts",
+    "seed": "tsx src/seed.ts",
     "start": "node --import tsx src/server.ts",
     "db:generate": "drizzle-kit generate",
     "test": "vitest run"

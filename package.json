@@ -10,6 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "seed": "pnpm --filter @clanker/api seed",
     "start": "pnpm --filter @clanker/web build:app && NODE_ENV=production pnpm --filter @clanker/api start",
     "test": "turbo run test",
     "lint": "oxlint --type-aware",
