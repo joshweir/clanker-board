@@ -1,5 +1,12 @@
 import { sql } from 'drizzle-orm'
-import { integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import {
+  type AnySQLiteColumn,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core'
 
 // Drizzle tables are the single source of truth (#14): drizzle-zod derives the
 // base Zod schemas, routes refine them. slug = key.toLowerCase() is derived,
@@ -59,6 +66,13 @@ export const issues = sqliteTable(
     rank: text('rank').notNull(),
     // Single nullable assignee; nulled if the actor is ever removed.
     assigneeId: integer('assignee_id').references(() => actors.id, { onDelete: 'set null' }),
+    // Single nullable parent (#30): work nests into a tree, an epic is just an
+    // issue with children. Acyclicity is enforced at the API boundary. Deleting a
+    // parent orphans its children (set null) rather than cascading the subtree; the
+    // self-reference needs the explicit return type to break drizzle's inference.
+    parentId: integer('parent_id').references((): AnySQLiteColumn => issues.id, {
+      onDelete: 'set null',
+    }),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
@@ -108,4 +122,22 @@ export const issueLabels = sqliteTable(
       .references(() => labels.id, { onDelete: 'cascade' }),
   },
   (table) => [primaryKey({ columns: [table.issueId, table.labelId] })],
+)
+
+// Blocking DAG (#30): an edge (issue_id, blocker_id) means issue_id is blocked by
+// blocker_id, so blocker_id must be done first. Cycles are rejected at the API
+// boundary, never stored. Both foreign keys cascade, so deleting either endpoint
+// (or the whole project, via issues) drops the edge. The composite primary key
+// makes re-declaring the same edge idempotent.
+export const issueBlockedBy = sqliteTable(
+  'issue_blocked_by',
+  {
+    issueId: integer('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    blockerId: integer('blocker_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.issueId, table.blockerId] })],
 )

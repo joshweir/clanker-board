@@ -6,7 +6,7 @@ import type { Db } from '../db/client'
 import { findIssue, findProjectBySlug, labelsForIssue, toIssue } from '../db/queries'
 import { issueLabels, issues, labels } from '../db/schema'
 import type { EventBus } from '../events/bus'
-import { jsonBody } from './openapi'
+import { idParam, jsonBody, SlugParamSchema } from './openapi'
 import { ErrorSchema } from './projects'
 
 // drizzle-zod derives the base schema from the Drizzle table (#14). Labels are
@@ -18,18 +18,6 @@ const LabelBodySchema = createInsertSchema(labels, {
 })
   .pick({ name: true })
   .openapi('LabelBody')
-
-const SlugParamSchema = z.object({
-  slug: z.string().openapi({ param: { name: 'slug', in: 'path' }, example: 'demo' }),
-})
-
-// Positive-integer path param (coerced from the string URL segment).
-const idParam = (name: string) =>
-  z.coerce
-    .number()
-    .int()
-    .positive()
-    .openapi({ param: { name, in: 'path' }, example: 1 })
 
 const LabelParamSchema = SlugParamSchema.extend({ id: idParam('id') })
 
@@ -67,7 +55,7 @@ const republishIssuesWithLabel = (
   issueRows: (typeof issues.$inferSelect)[],
 ): void => {
   for (const row of issueRows) {
-    bus.publishIssueChanged(project.id, toIssue(row, project.key, labelsForIssue(db, row.id)))
+    bus.publishIssueChanged(project.id, toIssue(db, row, project.key))
   }
 }
 
@@ -253,7 +241,7 @@ export function labelsRouter(db: Db, bus: EventBus) {
       // Composite PK makes re-attaching the same label a no-op (idempotent).
       db.insert(issueLabels).values({ issueId: issue.id, labelId }).onConflictDoNothing().run()
       const attached = labelsForIssue(db, issue.id)
-      bus.publishIssueChanged(project.id, toIssue(issue, project.key, attached))
+      bus.publishIssueChanged(project.id, toIssue(db, issue, project.key))
       return c.json(attached, 200)
     })
     .openapi(detachLabelRoute, (c) => {
@@ -273,7 +261,7 @@ export function labelsRouter(db: Db, bus: EventBus) {
         .where(and(eq(issueLabels.issueId, issue.id), eq(issueLabels.labelId, labelId)))
         .run()
       const remaining = labelsForIssue(db, issue.id)
-      bus.publishIssueChanged(project.id, toIssue(issue, project.key, remaining))
+      bus.publishIssueChanged(project.id, toIssue(db, issue, project.key))
       return c.json(remaining, 200)
     })
 }
