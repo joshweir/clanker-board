@@ -55,7 +55,9 @@ async function openSeededBoard() {
     await attachLabel(client, first, todo)
     await setAxis(client, [todo, doing])
   })
-  await router.navigate({ to: '/projects/$slug', params: { slug } })
+  // Reveal Done (hidden by default, #38) so the column-layout assertions see the
+  // full board shape.
+  await router.navigate({ to: '/projects/$slug', params: { slug }, search: { hideDone: false } })
   return { client, todo, doing }
 }
 

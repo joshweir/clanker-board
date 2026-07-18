@@ -144,7 +144,9 @@ describe('navigation', () => {
 
     await user.click(await screen.findByRole('link', { name: /DEMO/ }))
 
-    expect(await screen.findByRole('region', { name: 'Done' })).toBeDefined()
+    // "No status" always renders (Done is hidden by default, #38); its presence
+    // proves we landed on the board.
+    expect(await screen.findByRole('region', { name: 'No status' })).toBeDefined()
     expect(screen.getByRole('heading', { name: 'demo' })).toBeDefined()
   })
 })

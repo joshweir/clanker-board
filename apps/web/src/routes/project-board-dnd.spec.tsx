@@ -118,7 +118,8 @@ async function openBoard(wrapFetch?: (base: typeof fetch) => typeof fetch) {
     await attachLabel(client, number, todo)
     await client.api.projects[':slug'].board.$patch({ param, json: { columnAxis: [todo, doing] } })
   }, wrapFetch)
-  await router.navigate({ to: '/projects/$slug', params: { slug } })
+  // Reveal Done (hidden by default, #38) so a card can be dragged into it.
+  await router.navigate({ to: '/projects/$slug', params: { slug }, search: { hideDone: false } })
   const handle = await screen.findByRole('button', { name: /Wire the board/i })
   return { client, todo, doing, number, handle }
 }

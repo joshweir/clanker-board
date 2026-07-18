@@ -96,7 +96,9 @@ async function openBoard(wrapFetch?: (base: typeof fetch) => typeof fetch) {
     doing = await createLabel(client, 'Doing')
     await client.api.projects[':slug'].board.$patch({ param, json: { columnAxis: [todo, doing] } })
   }, wrapFetch)
-  await router.navigate({ to: '/projects/$slug', params: { slug } })
+  // Reveal Done (hidden by default, #38) so the reorder/quick-add assertions see the
+  // full board shape.
+  await router.navigate({ to: '/projects/$slug', params: { slug }, search: { hideDone: false } })
   await screen.findByRole('region', { name: 'To Do' })
   return { client, todo, doing, user }
 }

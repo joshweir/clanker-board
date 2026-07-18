@@ -1,22 +1,45 @@
 import { getRouteApi, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 
+import { FilterBar } from '../components/filter-bar'
 import { IssueModal } from '../components/issue-modal'
 import { ProjectTabs } from '../components/project-tabs'
+import { matchesFilters, toFilters, toSearchValues, type Filters } from '../filters'
 import { useLiveIssues } from '../use-live-issues'
 
 const route = getRouteApi('/projects/$slug/issues')
+
+// Narrow the native <select>'s string value to the state control's union without a
+// cast (CLAUDE.md): unknown values fall back to the default, Open.
+const parseState = (value: string): 'open' | 'closed' | 'all' =>
+  value === 'closed' ? 'closed' : value === 'all' ? 'all' : 'open'
 
 export function ProjectIssues() {
   const { slug } = route.useParams()
   const initial = route.useLoaderData()
   const { client, fetchImpl } = route.useRouteContext()
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
 
   // Same live issues + labels the board uses, minus the board layout (#37): the
   // table converges off the per-project SSE stream so an issue created/updated by an
   // agent (or another tab) appears with no reload.
   const { issues, labels } = useLiveIssues(fetchImpl, slug, initial)
   const [modalId, setModalId] = useState<number | null>(null)
+
+  // The same URL-driven filter axes the board uses (#38), plus this list's own
+  // Open/Closed/All state control (default Open). A filter change rewrites only the
+  // axis params (inactive axes collapse away); state is preserved (absent = Open).
+  const filters = toFilters(search)
+  const state = search.state ?? 'open'
+  const stateParam = (next: 'open' | 'closed' | 'all') => (next === 'open' ? undefined : next)
+  const setFilters = (next: Filters) =>
+    void navigate({ search: () => ({ ...toSearchValues(next), state: stateParam(state) }) })
+  const setState = (next: 'open' | 'closed' | 'all') =>
+    void navigate({ search: () => ({ ...toSearchValues(filters), state: stateParam(next) }) })
+
+  // The type axis is freeform (#28): options are the distinct types in the live set.
+  const types = [...new Set(issues.map((issue) => issue.type))].sort((a, b) => a.localeCompare(b))
 
   // Actors are a load-time snapshot (assignee names only); the issue read model
   // exposes assigneeId, so resolve the name here. The unassigned case renders blank.
@@ -29,8 +52,13 @@ export function ProjectIssues() {
     assigneeId === null ? '' : (initial.actors.find((a) => a.id === assigneeId)?.name ?? 'Unknown')
 
   // A stable, dense reading order: ascending issue number (KEY-1, KEY-2, ...). The
-  // board owns rank-based ordering; the list just needs a deterministic sort.
-  const rows = [...issues].sort((a, b) => a.number - b.number)
+  // board owns rank-based ordering; the list just needs a deterministic sort. Rows
+  // are reduced by the filter axes AND this list's Open/Closed/All state (#38) - a
+  // client-side view over the live set, never a server mutation.
+  const rows = issues
+    .filter((issue) => matchesFilters(issue, filters))
+    .filter((issue) => state === 'all' || issue.state === state)
+    .sort((a, b) => a.number - b.number)
 
   const editing = modalId === null ? null : (issues.find((i) => i.id === modalId) ?? null)
 
@@ -41,6 +69,17 @@ export function ProjectIssues() {
         <h1>{slug}</h1>
         <ProjectTabs slug={slug} />
       </header>
+
+      <FilterBar filters={filters} types={types} labels={labels} actors={initial.actors} onChange={setFilters}>
+        <label className="filter-group filter-state">
+          <span>State</span>
+          <select value={state} onChange={(event) => setState(parseState(event.target.value))}>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+      </FilterBar>
 
       <table className="issues-table">
         <thead>
