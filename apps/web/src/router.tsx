@@ -1,7 +1,7 @@
 import { createRootRouteWithContext, createRoute, createRouter, Outlet } from '@tanstack/react-router'
 
 import type { ApiClient } from './api'
-import { ProjectDetail } from './routes/project-detail'
+import { ProjectBoard } from './routes/project-board'
 import { ProjectsList } from './routes/projects-list'
 
 // The client lives in router context so loaders fetch through it and tests can
@@ -27,7 +27,30 @@ const indexRoute = createRoute({
 const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projects/$slug',
-  component: ProjectDetail,
+  // Seed the board from three reads: its column_axis, the project's labels (column
+  // titles + card placement), and its issues (the cards). The per-project SSE
+  // stream (#33) takes over for live updates once mounted.
+  loader: async ({ context, params }) => {
+    const param = { slug: params.slug }
+    const [boardRes, labelsRes, issuesRes] = await Promise.all([
+      context.client.api.projects[':slug'].board.$get({ param }),
+      context.client.api.projects[':slug'].labels.$get({ param }),
+      context.client.api.projects[':slug'].issues.$get({ param }),
+    ])
+    const board = await boardRes.json()
+    const labels = await labelsRes.json()
+    const issues = await issuesRes.json()
+    // Narrow away the 404 error shapes (unknown slug) so the component gets clean
+    // board/label/issue data; a missing project surfaces as a load error.
+    if ('error' in board) {
+      throw new Error(board.error)
+    }
+    if (!Array.isArray(labels) || !Array.isArray(issues)) {
+      throw new Error('Project not found')
+    }
+    return { board, labels, issues }
+  },
+  component: ProjectBoard,
 })
 
 const routeTree = rootRoute.addChildren([indexRoute, projectRoute])

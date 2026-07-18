@@ -139,12 +139,12 @@ describe('live updates', () => {
 })
 
 describe('navigation', () => {
-  test('a project links to its detail page', async () => {
+  test('a project links to its board', async () => {
     const { user } = await renderApp(seedProject('Demo', 'DEMO'))
 
     await user.click(await screen.findByRole('link', { name: /DEMO/ }))
 
-    expect(await screen.findByText('Board coming soon.')).toBeDefined()
+    expect(await screen.findByRole('region', { name: 'Done' })).toBeDefined()
     expect(screen.getByRole('heading', { name: 'demo' })).toBeDefined()
   })
 })
