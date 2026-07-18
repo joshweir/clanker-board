@@ -30,6 +30,7 @@ import {
   type Filters,
 } from '../filters';
 import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from '../move';
+import { typeColors } from '../type-color';
 import { upsertById } from '../upsert';
 import { useLiveIssues } from '../use-live-issues';
 
@@ -212,6 +213,9 @@ export function ProjectBoard() {
   const types = [...new Set(issues.map((issue) => issue.type))].sort((a, b) =>
     a.localeCompare(b),
   );
+  // Round-robin a color per distinct type so each card's badge is consistent across
+  // the board; sorted `types` keeps a type's color stable as the live set grows.
+  const typeColorByName = typeColors(types);
 
   // A filter change rewrites only the axis query params (inactive axes collapse away,
   // keeping shared URLs clean); Hide Done is preserved (absent = its default, hidden).
@@ -536,7 +540,23 @@ export function ProjectBoard() {
                         }
                       }}
                     >
-                      <span className="board-card-key">{card.key}</span>
+                      <div className="board-card-top">
+                        <span className="board-card-key">{card.key}</span>
+                        {(() => {
+                          const color = typeColorByName.get(card.type);
+                          return color ? (
+                            <span
+                              className="board-card-type"
+                              style={{
+                                background: color.bg,
+                                color: color.fg,
+                              }}
+                            >
+                              {card.type}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                       <span className="board-card-title">{card.title}</span>
                     </li>
                   );

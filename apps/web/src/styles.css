@@ -19,14 +19,21 @@ body {
 }
 
 .board {
-  padding: 2rem 1rem;
+  padding: 1rem 1rem 2rem;
 }
 
 .board-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Reset the h1's default block margins so the whole header row sits on one centred
+   line (the project title, Back link, tabs, and search all vertically aligned). */
+.board-header h1 {
+  margin: 0;
+  font-size: 1.35rem;
 }
 
 .board-columns {
@@ -128,10 +135,27 @@ body {
   outline-offset: 2px;
 }
 
+.board-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .board-card-key {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
   opacity: 0.7;
+}
+
+.board-card-type {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.3rem;
+  white-space: nowrap;
 }
 
 .quick-add {
@@ -551,6 +575,84 @@ button.danger {
   padding: 0.3rem 0.75rem;
 }
 
+/* Type / Label multi-select (#38): a trigger showing the axis label + chosen-value
+   badges, dropping a checkbox list. Anchored so the panel floats over the board. */
+.multi-select {
+  position: relative;
+}
+
+.multi-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.multi-select-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.multi-select-placeholder {
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
+.multi-select-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.multi-select-badge {
+  font-size: 0.75rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  background: color-mix(in srgb, CanvasText 6%, Canvas);
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-select-more {
+  opacity: 0.7;
+}
+
+.multi-select-caret {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  line-height: 1;
+}
+
+.multi-select-panel {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: calc(100% + 0.35rem);
+  z-index: 20;
+  min-width: 100%;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  background: Canvas;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+.multi-select-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
 /* Empty board column while filtered/unpopulated - the board shape never restructures (#38). */
 .board-empty {
   opacity: 0.5;
@@ -585,7 +687,7 @@ button.danger {
 
 /* Dense issues list (#37): a table sharing the board's detail modal. */
 .issues {
-  padding: 2rem 1rem;
+  padding: 1rem 1rem 2rem;
 }
 
 .issues-table {

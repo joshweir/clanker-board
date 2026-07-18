@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Actor, Label } from '../api';
 import { emptyFilters, isFilterActive, type Filters } from '../filters';
+import { MultiSelectFilter } from './multi-select-filter';
 
 // One consistent filter bar for both the Board and Issues tabs (#38): type (multi,
 // OR), label (multi, OR), assignee (Any / Unassigned / actor), and blocked / ready
@@ -51,37 +52,26 @@ export function FilterBar({
     // A fieldset groups the controls (implicit role="group") without becoming a
     // landmark region - the board reserves the `region` role for its columns.
     <fieldset className="filter-bar" aria-label="Filters">
-      <fieldset className="filter-group">
-        <legend>Type</legend>
-        {types.map((type) => (
-          <label key={type} className="filter-option">
-            <input
-              type="checkbox"
-              checked={filters.type.includes(type)}
-              onChange={() =>
-                onChange({ ...filters, type: toggle(filters.type, type) })
-              }
-            />
-            {type}
-          </label>
-        ))}
-      </fieldset>
+      <MultiSelectFilter
+        label="Type"
+        options={types.map((type) => ({ value: type, label: type }))}
+        selected={filters.type}
+        onToggle={(value) =>
+          onChange({ ...filters, type: toggle(filters.type, value) })
+        }
+      />
 
-      <fieldset className="filter-group">
-        <legend>Label</legend>
-        {labels.map((label) => (
-          <label key={label.id} className="filter-option">
-            <input
-              type="checkbox"
-              checked={filters.label.includes(label.id)}
-              onChange={() =>
-                onChange({ ...filters, label: toggle(filters.label, label.id) })
-              }
-            />
-            {label.name}
-          </label>
-        ))}
-      </fieldset>
+      <MultiSelectFilter
+        label="Label"
+        options={labels.map((label) => ({
+          value: String(label.id),
+          label: label.name,
+        }))}
+        selected={filters.label.map(String)}
+        onToggle={(value) =>
+          onChange({ ...filters, label: toggle(filters.label, Number(value)) })
+        }
+      />
 
       <label className="filter-group filter-assignee">
         <span>Assignee</span>

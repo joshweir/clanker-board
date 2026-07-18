@@ -1,7 +1,18 @@
 import { screen, waitFor, within } from '@testing-library/react';
+import type { UserEvent } from '@testing-library/user-event';
 import { describe, expect, test } from 'vitest';
 import type { ApiClient } from '../api';
 import { renderApp } from '../test/harness';
+
+// Type and Label are dropdowns now (#38): open the axis (idempotent - only if closed)
+// before toggling one of its option checkboxes.
+async function toggleTypeOption(user: UserEvent, name: string): Promise<void> {
+  const trigger = screen.getByRole('button', { name: /^Type/ });
+  if (trigger.getAttribute('aria-expanded') !== 'true') {
+    await user.click(trigger);
+  }
+  await user.click(await screen.findByRole('checkbox', { name }));
+}
 
 // Seam 2: the shared, URL-driven filter bar (#38) on both the Board and Issues tabs,
 // driven against a real in-process api. Filtering reduces which cards/rows show
@@ -167,7 +178,7 @@ describe('board filter bar', () => {
   test('a type filter reduces cards without restructuring; empty columns say No cards', async () => {
     const { user } = await openBoard();
 
-    await user.click(screen.getByRole('checkbox', { name: 'bug' }));
+    await toggleTypeOption(user, 'bug');
 
     // Only the bug remains, and it stays in its own column.
     expect(within(column('To Do')).getByText('Bug for Ada')).toBeDefined();
@@ -217,7 +228,7 @@ describe('board filter bar', () => {
     // Toggling a filter writes it to the raw query string (shareable, per-viewer);
     // an inactive axis is omitted entirely so the URL stays clean.
     expect(router.state.location.searchStr).toContain('bug');
-    await user.click(screen.getByRole('checkbox', { name: 'bug' })); // clear it
+    await toggleTypeOption(user, 'bug'); // clear it
     await waitFor(() =>
       expect(router.state.location.searchStr).not.toContain('type'),
     );
@@ -234,7 +245,7 @@ describe('board filter bar', () => {
     // Reveal Done (a view control, not a filter axis) and add a real filter.
     await user.click(screen.getByRole('checkbox', { name: 'Hide Done' })); // now showing Done
     expect(within(column('Done')).getByText('Shipped work')).toBeDefined();
-    await user.click(screen.getByRole('checkbox', { name: 'bug' }));
+    await toggleTypeOption(user, 'bug');
 
     const clear = await screen.findByRole('button', { name: 'Clear all' });
     await user.click(clear);
@@ -274,7 +285,7 @@ describe('issues list filter bar', () => {
   test('a filter axis combines with the state control (AND) and Clear all resets only the axis', async () => {
     const { user } = await openIssues({ state: 'all' });
     // Filter to tasks across all states: the open task and the closed task remain.
-    await user.click(screen.getByRole('checkbox', { name: 'task' }));
+    await toggleTypeOption(user, 'task');
     await waitFor(() => expect(screen.queryByText('Bug for Ada')).toBeNull());
     expect(screen.getByText('Task for Bob')).toBeDefined();
     expect(screen.getByText('Shipped work')).toBeDefined();
