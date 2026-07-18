@@ -1,10 +1,25 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm'
 
 import type { Db } from './client'
-import { issues, projects } from './schema'
+import { issueLabels, issues, labels, projects } from './schema'
 
 type ProjectRow = typeof projects.$inferSelect
 type IssueRow = typeof issues.$inferSelect
+
+// A label snapshot is just its row (#24); labels have no derived handle. Shared by
+// the label routes, the issue snapshots that embed them, and the SSE payloads.
+export type LabelSnapshot = typeof labels.$inferSelect
+
+// The labels attached to one issue, name-ordered for a stable read. Powers both
+// the issue snapshot's `labels` array and the re-publish after a label mutation.
+export const labelsForIssue = (db: Db, issueId: number): LabelSnapshot[] =>
+  db
+    .select(getTableColumns(labels))
+    .from(labels)
+    .innerJoin(issueLabels, eq(issueLabels.labelId, labels.id))
+    .where(eq(issueLabels.issueId, issueId))
+    .orderBy(asc(labels.name))
+    .all()
 
 // slug = key.toLowerCase() is derived, never stored (#18). Shared by the project
 // routes (HTTP responses) and the SSE layer (entity-snapshot payloads).
@@ -20,11 +35,12 @@ export const findProjectBySlug = (db: Db, slug: string) =>
     .get()
 
 // KEY-N is the stable, human-facing handle (#18): project key + per-project
-// number, derived from the row, never stored. Shared by the issue routes and the
-// per-project SSE payloads.
-export const toIssue = (row: IssueRow, projectKey: string) => ({
+// number, derived from the row, never stored. Issue reads include their attached
+// labels (#24). Shared by the issue routes and the per-project SSE payloads.
+export const toIssue = (row: IssueRow, projectKey: string, attachedLabels: LabelSnapshot[]) => ({
   ...row,
   key: `${projectKey}-${row.number}`,
+  labels: attachedLabels,
 })
 
 export type IssueSnapshot = ReturnType<typeof toIssue>

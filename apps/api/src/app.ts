@@ -6,6 +6,7 @@ import { createEventBus } from './events/bus'
 import { actorsRouter } from './routes/actors'
 import { eventsRouter } from './routes/events'
 import { issuesRouter } from './routes/issues'
+import { labelsRouter } from './routes/labels'
 import { projectsRouter } from './routes/projects'
 
 // All API routes live under /api; /openapi.json + /docs stay top-level (#17)
@@ -30,6 +31,7 @@ export function createApp(db: Db) {
   return app
     .route('/api', projectsRouter(db, bus))
     .route('/api', issuesRouter(db, bus))
+    .route('/api', labelsRouter(db, bus))
     .route('/api', actorsRouter(db))
     .route('/api', eventsRouter(db, bus))
     .get('/docs', Scalar({ url: '/openapi.json' }))

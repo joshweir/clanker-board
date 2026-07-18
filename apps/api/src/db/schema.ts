@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // Drizzle tables are the single source of truth (#14): drizzle-zod derives the
 // base Zod schemas, routes refine them. slug = key.toLowerCase() is derived,
@@ -67,4 +67,45 @@ export const issues = sqliteTable(
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
   },
   (table) => [uniqueIndex('issues_project_number_unique').on(table.projectId, table.number)],
+)
+
+// Labels are strictly per-project (#24): defining "bug" in one project never
+// leaks into another. Deleting a project cascade-deletes its labels (and, via
+// issue_labels below, their attachments). Names are case-insensitively unique
+// within a project so a project's vocabulary has no accidental duplicates.
+export const labels = sqliteTable(
+  'labels',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (table) => [
+    uniqueIndex('labels_project_name_ci_unique').on(table.projectId, sql`lower(${table.name})`),
+  ],
+)
+
+// Many-to-many attachment of labels to issues (#24): several labels per issue to
+// capture cross-cutting state. Both foreign keys cascade, so deleting an issue
+// drops its attachments and deleting a label detaches it from every issue. The
+// composite primary key makes (re)attaching the same label idempotent.
+export const issueLabels = sqliteTable(
+  'issue_labels',
+  {
+    issueId: integer('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    labelId: integer('label_id')
+      .notNull()
+      .references(() => labels.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.issueId, table.labelId] })],
 )

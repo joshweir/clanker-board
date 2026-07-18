@@ -3,17 +3,19 @@ import { and, asc, eq, max } from 'drizzle-orm'
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 
 import type { Db } from '../db/client'
-import { findIssue, findProjectBySlug, toIssue } from '../db/queries'
+import { findIssue, findProjectBySlug, labelsForIssue, toIssue } from '../db/queries'
 import { actors, issues } from '../db/schema'
 import { rankAfter } from '../domain/rank'
 import type { EventBus } from '../events/bus'
+import { LabelSchema } from './labels'
 import { jsonBody } from './openapi'
 import { ErrorSchema } from './projects'
 
 // drizzle-zod derives the base schema from the Drizzle table (#14); the route adds
-// the derived KEY-N handle (project key + per-project number, never stored - #18).
+// the derived KEY-N handle (project key + per-project number, never stored - #18)
+// and the issue's attached labels (#24).
 export const IssueSchema = createSelectSchema(issues)
-  .extend({ key: z.string().openapi({ example: 'DEMO-1' }) })
+  .extend({ key: z.string().openapi({ example: 'DEMO-1' }), labels: z.array(LabelSchema) })
   .openapi('Issue')
 
 const CreateIssueSchema = createInsertSchema(issues, {
@@ -132,7 +134,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
         .orderBy(asc(issues.rank), asc(issues.number))
         .all()
       return c.json(
-        rows.map((row) => toIssue(row, project.key)),
+        rows.map((row) => toIssue(row, project.key, labelsForIssue(db, row.id))),
         200,
       )
     })
@@ -157,7 +159,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
         .values({ projectId: project.id, number, title, type, body: body ?? '', rank })
         .returning()
         .get()
-      const issue = toIssue(row, project.key)
+      // A brand-new issue has no labels yet.
+      const issue = toIssue(row, project.key, [])
       bus.publishIssueChanged(project.id, issue)
       return c.json(issue, 201)
     })
@@ -171,7 +174,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404)
       }
-      return c.json(toIssue(row, project.key), 200)
+      return c.json(toIssue(row, project.key, labelsForIssue(db, row.id)), 200)
     })
     .openapi(patchIssueRoute, (c) => {
       const { slug, number } = c.req.valid('param')
@@ -200,7 +203,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404)
       }
-      const issue = toIssue(row, project.key)
+      const issue = toIssue(row, project.key, labelsForIssue(db, row.id))
       bus.publishIssueChanged(project.id, issue)
       return c.json(issue, 200)
     })
