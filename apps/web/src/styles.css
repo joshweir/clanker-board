@@ -36,6 +36,10 @@ body {
   overflow-x: auto;
 }
 
+.board-column-draggable {
+  flex: 0 0 16rem;
+}
+
 .board-column {
   flex: 0 0 16rem;
   border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
@@ -44,11 +48,30 @@ body {
   background: color-mix(in srgb, CanvasText 4%, Canvas);
 }
 
+.board-column-draggable .board-column {
+  flex: 1 1 auto;
+}
+
 .board-column-header {
   display: flex;
   align-items: baseline;
+  gap: 0.5rem;
   justify-content: space-between;
   margin-bottom: 0.75rem;
+}
+
+.column-drag-handle {
+  cursor: grab;
+  opacity: 0.5;
+  font-size: 0.85rem;
+  line-height: 1;
+  border-radius: 0.25rem;
+}
+
+.column-drag-handle:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+  opacity: 1;
 }
 
 .board-column-header h2 {
@@ -56,6 +79,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0;
+  margin-right: auto;
 }
 
 .board-column-count {
@@ -98,6 +122,27 @@ body {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
   opacity: 0.7;
+}
+
+.quick-add {
+  margin: 0.5rem 0;
+}
+
+.quick-add-input {
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px dashed color-mix(in srgb, CanvasText 25%, transparent);
+  background: transparent;
+  color: CanvasText;
+}
+
+.quick-add-input:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 1px;
+  border-style: solid;
 }
 
 .toast {
