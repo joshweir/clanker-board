@@ -478,6 +478,76 @@ button.danger {
   margin-inline-start: auto;
 }
 
+/* One shared, URL-driven filter bar for both project tabs (#38). A <fieldset>, so
+   reset its default min-width to let it wrap inside a flex layout. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  min-inline-size: 0;
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, CanvasText 3%, Canvas);
+}
+
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.filter-group > legend,
+.filter-group > span {
+  float: none;
+  padding: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.filter-assignee,
+.filter-state {
+  flex-direction: row;
+}
+
+.filter-assignee select,
+.filter-state select {
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+  border-radius: 0.3rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: Canvas;
+  color: CanvasText;
+}
+
+.filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.filter-clear {
+  margin-inline-start: auto;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.75rem;
+}
+
+/* Empty board column while filtered/unpopulated - the board shape never restructures (#38). */
+.board-empty {
+  opacity: 0.5;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.25rem;
+}
+
 /* Board | Issues tab switcher shown on both project views (#37). */
 .project-tabs {
   display: flex;

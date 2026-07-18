@@ -12,8 +12,10 @@ import { getRouteApi, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 
 import { layoutBoard, type BoardColumn } from '../board-layout'
+import { FilterBar } from '../components/filter-bar'
 import { IssueModal } from '../components/issue-modal'
 import { ProjectTabs } from '../components/project-tabs'
+import { matchesFilters, toFilters, toSearchValues, type Filters } from '../filters'
 import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from '../move'
 import { upsertById } from '../upsert'
 import { useLiveIssues } from '../use-live-issues'
@@ -121,6 +123,8 @@ export function ProjectBoard() {
   const { slug } = route.useParams()
   const initial = route.useLoaderData()
   const { client, fetchImpl } = route.useRouteContext()
+  const search = route.useSearch()
+  const navigate = route.useNavigate()
   const [board, setBoard] = useState(initial.board)
   const [toast, setToast] = useState<string | null>(null)
   const [modal, setModal] = useState<ActiveModal>(null)
@@ -148,7 +152,28 @@ export function ProjectBoard() {
     return () => clearTimeout(timer)
   }, [toast])
 
-  const columns = layoutBoard(board.columnAxis, labels, issues)
+  // Filtering is a client-side view over the live issue set (#38): reduce which
+  // cards show, then lay out the SAME axis columns - the board shape never
+  // restructures. Hide Done is view structure, not a filter axis, so it drops the
+  // Done COLUMN (default: hidden) rather than reducing cards. SSE upserts keep
+  // flowing into `issues` underneath; this recomputes on every change.
+  const filters = toFilters(search)
+  const hideDone = search.hideDone ?? true
+  const visibleIssues = issues.filter((issue) => matchesFilters(issue, filters))
+  const allColumns = layoutBoard(board.columnAxis, labels, visibleIssues)
+  const columns = hideDone ? allColumns.filter((column) => column.kind !== 'done') : allColumns
+
+  // The type axis is freeform (#28), so its filter options are the distinct types in
+  // the live set (sorted for a stable order), not a fixed enum.
+  const types = [...new Set(issues.map((issue) => issue.type))].sort((a, b) => a.localeCompare(b))
+
+  // A filter change rewrites only the axis query params (inactive axes collapse away,
+  // keeping shared URLs clean); Hide Done is preserved (absent = its default, hidden).
+  const hideDoneParam = (next: boolean) => (next ? undefined : false)
+  const setFilters = (next: Filters) =>
+    void navigate({ search: () => ({ ...toSearchValues(next), hideDone: hideDoneParam(hideDone) }) })
+  const setHideDone = (next: boolean) =>
+    void navigate({ search: () => ({ ...toSearchValues(filters), hideDone: hideDoneParam(next) }) })
 
   // A quick-add posts the issue, optimistically shows it in the target column, then
   // attaches the column's bound axis label (#35). The card's own echoes are suppressed
@@ -305,6 +330,11 @@ export function ProjectBoard() {
         release()
         return
       }
+      // ponytail: while filters are active, target.cards is the VISIBLE (filtered)
+      // set, so a drop's rank is computed between its visible neighbours - a hidden
+      // card between them keeps its old rank and may render out of the intended order
+      // once filters clear (an accepted cosmetic limitation, #38). Rank against the
+      // full column set (fetch/hold unfiltered neighbours) if exact ordering matters.
       const newRank = rankForDrop(target.cards, id, destination.index)
       const plan = planMove(dragged, target, board.columnAxis, newRank)
       const labelById = new Map(labels.map((l) => [l.id, l]))
@@ -359,6 +389,7 @@ export function ProjectBoard() {
             <QuickAdd columnTitle={column.title} position="top" onAdd={(title) => handleQuickAdd(column, title)} />
           )}
           <ul className="board-cards">
+            {column.cards.length === 0 ? <li className="board-empty">No cards</li> : null}
             {column.cards.map((card, index) => (
               <Draggable draggableId={String(card.id)} index={index} key={card.id}>
                 {(dragProvided, snapshot) => (
@@ -406,6 +437,12 @@ export function ProjectBoard() {
           New issue
         </button>
       </header>
+      <FilterBar filters={filters} types={types} labels={labels} actors={initial.actors} onChange={setFilters}>
+        <label className="filter-option">
+          <input type="checkbox" checked={hideDone} onChange={() => setHideDone(!hideDone)} />
+          Hide Done
+        </label>
+      </FilterBar>
       <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
         <Droppable droppableId="board" direction="horizontal" type="column">
           {(boardProvided) => (

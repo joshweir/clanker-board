@@ -96,8 +96,11 @@ describe('project issues list', () => {
   })
 
   test('an edit made via the API updates the row live', async () => {
-    const { client } = await openSeededIssues()
+    const { client, user } = await openSeededIssues()
     await screen.findByRole('button', { name: /Open DEMO-1 Wire the list/ })
+
+    // Show every state so closing the issue keeps its row visible (default is Open, #38).
+    await user.selectOptions(screen.getByRole('combobox', { name: 'State' }), 'all')
 
     await client.api.projects[':slug'].issues[':number'].$patch({
       param: { slug, number: String(1) },
