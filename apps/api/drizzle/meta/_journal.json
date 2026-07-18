@@ -15,6 +15,13 @@
       "when": 1784332485287,
       "tag": "0001_quick_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784333720190,
+      "tag": "0002_slim_spiral",
+      "breakpoints": true
     }
   ]
 }

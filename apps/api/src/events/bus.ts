@@ -1,4 +1,4 @@
-import type { IssueSnapshot, ProjectSnapshot } from '../db/queries'
+import type { IssueSnapshot, LabelSnapshot, ProjectSnapshot } from '../db/queries'
 
 // Coarse entity-snapshot events (#6/#18): the client upserts by id, so redelivery
 // is idempotent. project.deleted carries only the id (there is no snapshot left).
@@ -9,9 +9,15 @@ export type InstanceEvent =
 // Per-project events land on a project's channel. issue.changed carries the full
 // snapshot (client upserts by id); issue.deleted carries the id + KEY-N number so
 // a listener can drop the card without a snapshot. board.changed etc. join here.
+// label.changed carries the label snapshot; label.deleted carries only the id so
+// a listener can drop it without a snapshot. Attaching/detaching a label (or
+// renaming/deleting one) changes the affected issues' snapshots too, so those
+// mutations also re-publish issue.changed - clients converge on both (#24).
 export type ProjectEvent =
   | { event: 'issue.changed'; data: IssueSnapshot }
   | { event: 'issue.deleted'; data: { id: number; number: number } }
+  | { event: 'label.changed'; data: LabelSnapshot }
+  | { event: 'label.deleted'; data: { id: number } }
 
 type Listener<T> = (message: T) => void
 
@@ -63,6 +69,12 @@ export function createEventBus() {
     },
     publishIssueDeleted(projectId: number, id: number, number: number): void {
       projectChannel(projectId).publish({ event: 'issue.deleted', data: { id, number } })
+    },
+    publishLabelChanged(projectId: number, label: LabelSnapshot): void {
+      projectChannel(projectId).publish({ event: 'label.changed', data: label })
+    },
+    publishLabelDeleted(projectId: number, id: number): void {
+      projectChannel(projectId).publish({ event: 'label.deleted', data: { id } })
     },
   }
 }
