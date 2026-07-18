@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { readEventStream } from './sse'
-import type { Board, Issue, Label } from './api'
+import type { Board, Comment, Issue, Label } from './api'
 
 // Per-project SSE payloads, validated at the client boundary (no casts). Each
 // `satisfies z.ZodType<T>` ties the snapshot shape to the API type, so a contract
@@ -41,23 +41,37 @@ const boardSnapshot = z.object({
   updatedAt: z.string(),
 }) satisfies z.ZodType<Board>
 
+// A comment snapshot is a flat log entry (#31): no derived fields, no updatedAt.
+const commentSnapshot = z.object({
+  id: z.number(),
+  issueId: z.number(),
+  actorId: z.number(),
+  body: z.string(),
+  createdAt: z.string(),
+}) satisfies z.ZodType<Comment>
+
 // issue.deleted / label.deleted both carry the entity id (issue.deleted also a
 // number, unused here - the board drops the card by id).
 const deletedPayload = z.object({ id: z.number() })
 
+// Every handler is optional so each consumer reacts to only the events it needs: the
+// board wants issue/label/board changes (#33/#35); the issue modal wants this issue's
+// issue.changed and comment.created (#36). Each call opens its own stream, so an open
+// modal and the board behind it hold one connection each - fine at this scale.
 export interface ProjectEventHandlers {
-  onIssueChanged: (issue: Issue) => void
-  onIssueDeleted: (id: number) => void
-  onLabelChanged: (label: Label) => void
-  onLabelDeleted: (id: number) => void
-  onBoardChanged: (board: Board) => void
+  onIssueChanged?: (issue: Issue) => void
+  onIssueDeleted?: (id: number) => void
+  onLabelChanged?: (label: Label) => void
+  onLabelDeleted?: (id: number) => void
+  onCommentCreated?: (comment: Comment) => void
+  onBoardChanged?: (board: Board) => void
 }
 
 // Consume a project's stream through the shared fetch-based SSE reader (sse.ts).
 // The board seeds from the loader, then converges live: upsert-by-id on
 // issue/label changes and re-layout on board.changed keep redelivery idempotent,
 // exactly as the instance stream does for the project list (#27). comment.created
-// also lands on this channel but does not affect the board, so it is ignored.
+// lands here too; the board ignores it, the issue modal appends it live (#36).
 // Returns an unsubscribe that aborts the stream.
 export function subscribeToProjectEvents(
   fetchImpl: typeof fetch,
@@ -72,19 +86,22 @@ export function subscribeToProjectEvents(
     (event, data) => {
       switch (event) {
         case 'issue.changed':
-          handlers.onIssueChanged(issueSnapshot.parse(data))
+          handlers.onIssueChanged?.(issueSnapshot.parse(data))
           break
         case 'issue.deleted':
-          handlers.onIssueDeleted(deletedPayload.parse(data).id)
+          handlers.onIssueDeleted?.(deletedPayload.parse(data).id)
           break
         case 'label.changed':
-          handlers.onLabelChanged(labelSnapshot.parse(data))
+          handlers.onLabelChanged?.(labelSnapshot.parse(data))
           break
         case 'label.deleted':
-          handlers.onLabelDeleted(deletedPayload.parse(data).id)
+          handlers.onLabelDeleted?.(deletedPayload.parse(data).id)
+          break
+        case 'comment.created':
+          handlers.onCommentCreated?.(commentSnapshot.parse(data))
           break
         case 'board.changed':
-          handlers.onBoardChanged(boardSnapshot.parse(data))
+          handlers.onBoardChanged?.(boardSnapshot.parse(data))
           break
       }
     },

@@ -12,9 +12,14 @@ import { getRouteApi, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 
 import { layoutBoard, type BoardColumn } from '../board-layout'
+import { IssueModal } from '../components/issue-modal'
 import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from '../move'
 import { subscribeToProjectEvents } from '../project-events'
 import type { ApiClient, Issue, Label } from '../api'
+
+// Which issue the detail modal is showing: an existing card by id (kept fresh from
+// the live issues list) or create mode from the header's "New issue" button (#36).
+type ActiveModal = { kind: 'edit'; id: number } | { kind: 'new' } | null
 
 const route = getRouteApi('/projects/$slug')
 
@@ -125,6 +130,7 @@ export function ProjectBoard() {
   const [labels, setLabels] = useState(initial.labels)
   const [issues, setIssues] = useState(initial.issues)
   const [toast, setToast] = useState<string | null>(null)
+  const [modal, setModal] = useState<ActiveModal>(null)
 
   // Ids whose incoming SSE we ignore: the card being dragged (and until its move
   // persists), so a server echo cannot yank it mid-drag or flicker it before the
@@ -370,11 +376,23 @@ export function ProjectBoard() {
             {column.cards.map((card, index) => (
               <Draggable draggableId={String(card.id)} index={index} key={card.id}>
                 {(dragProvided, snapshot) => (
+                  // @hello-pangea/dnd spreads a runtime role="button" + tabIndex onto
+                  // this element (the drag handle: Space lifts, arrows move), so it is a
+                  // genuine interactive control - a plain click/Enter (which the drag
+                  // sensor leaves alone) opens the detail modal (#36). The a11y lint
+                  // rule can't see the spread role, hence the scoped disable below.
+                  // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
                   <li
                     ref={dragProvided.innerRef}
                     {...dragProvided.draggableProps}
                     {...dragProvided.dragHandleProps}
                     className={snapshot.isDragging ? 'board-card dragging' : 'board-card'}
+                    onClick={() => setModal({ kind: 'edit', id: card.id })}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        setModal({ kind: 'edit', id: card.id })
+                      }
+                    }}
                   >
                     <span className="board-card-key">{card.key}</span>
                     <span className="board-card-title">{card.title}</span>
@@ -397,6 +415,9 @@ export function ProjectBoard() {
       <header className="board-header">
         <Link to="/">← Projects</Link>
         <h1>{slug}</h1>
+        <button type="button" className="new-issue" onClick={() => setModal({ kind: 'new' })}>
+          New issue
+        </button>
       </header>
       <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
         <Droppable droppableId="board" direction="horizontal" type="column">
@@ -432,6 +453,28 @@ export function ProjectBoard() {
           {toast}
         </div>
       )}
+      {modal !== null ? (
+        // Edit mode resolves the card from the live issues list so the modal opens
+        // on a current snapshot (and closes itself if the card was deleted); create
+        // mode passes null. labels/issues feed the sidebar pickers (#36).
+        (() => {
+          const editing = modal.kind === 'edit' ? issues.find((i) => i.id === modal.id) : null
+          if (modal.kind === 'edit' && !editing) {
+            return null
+          }
+          return (
+            <IssueModal
+              client={client}
+              fetchImpl={fetchImpl}
+              slug={slug}
+              issue={editing ?? null}
+              labels={labels}
+              issues={issues}
+              onClose={() => setModal(null)}
+            />
+          )
+        })()
+      ) : null}
     </main>
   )
 }

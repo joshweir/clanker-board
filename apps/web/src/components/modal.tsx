@@ -1,26 +1,18 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 
-interface ModalProps {
-  title: string
-  onClose: () => void
-  children: ReactNode
-}
-
-// Native <dialog> via showModal: focus trap, Escape-to-close, backdrop, and
-// focus restoration on close all come from the platform (a11y is not
-// simplified). Escape fires a `cancel` event, which we route to onClose.
-export function Modal({ title, onClose, children }: ModalProps) {
+// Drive a native <dialog> as a modal: focus trap, Escape-to-close, backdrop, and
+// focus restoration on close all come from the platform (a11y is not simplified).
+// showModal gives the full treatment in browsers; jsdom (Seam-2 tests) implements
+// neither showModal nor close, so fall back to the `open` attribute, which still
+// exposes the dialog role and its contents. Shared by the simple Modal below and
+// the wider issue modal (#36).
+export function useModalDialog(): RefObject<HTMLDialogElement | null> {
   const ref = useRef<HTMLDialogElement>(null)
-  const titleId = useId()
-
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) {
       return
     }
-    // showModal gives the full modal treatment in browsers; jsdom (Seam-2
-    // tests) implements neither showModal nor close, so fall back to the `open`
-    // attribute, which still exposes the dialog role and its contents.
     if (typeof dialog.showModal === 'function') {
       dialog.showModal()
     } else {
@@ -34,6 +26,18 @@ export function Modal({ title, onClose, children }: ModalProps) {
       }
     }
   }, [])
+  return ref
+}
+
+interface ModalProps {
+  title: string
+  onClose: () => void
+  children: ReactNode
+}
+
+export function Modal({ title, onClose, children }: ModalProps) {
+  const ref = useModalDialog()
+  const titleId = useId()
 
   return (
     <dialog
