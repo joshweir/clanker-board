@@ -2,6 +2,7 @@ import { createRootRouteWithContext, createRoute, createRouter, Outlet } from '@
 
 import type { ApiClient } from './api'
 import { ProjectBoard } from './routes/project-board'
+import { ProjectIssues } from './routes/project-issues'
 import { ProjectsList } from './routes/projects-list'
 
 // The client lives in router context so loaders fetch through it and tests can
@@ -53,7 +54,34 @@ const projectRoute = createRoute({
   component: ProjectBoard,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute, projectRoute])
+const projectIssuesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$slug/issues',
+  // The dense list alternative to the board (#37): seed from the project's issues
+  // (rows), labels (chips), and actors (assignee names). The same per-project SSE
+  // stream (#33) takes over for live issue/label updates once mounted; actors are a
+  // load-time snapshot (the modal reloads them when opened).
+  loader: async ({ context, params }) => {
+    const param = { slug: params.slug }
+    const [issuesRes, labelsRes, actorsRes] = await Promise.all([
+      context.client.api.projects[':slug'].issues.$get({ param }),
+      context.client.api.projects[':slug'].labels.$get({ param }),
+      context.client.api.actors.$get(),
+    ])
+    const issues = await issuesRes.json()
+    const labels = await labelsRes.json()
+    const actors = await actorsRes.json()
+    // Narrow away the 404 error shapes (unknown slug) so the component gets clean
+    // arrays; a missing project surfaces as a load error.
+    if (!Array.isArray(issues) || !Array.isArray(labels)) {
+      throw new Error('Project not found')
+    }
+    return { issues, labels, actors }
+  },
+  component: ProjectIssues,
+})
+
+const routeTree = rootRoute.addChildren([indexRoute, projectRoute, projectIssuesRoute])
 
 export function createAppRouter(client: ApiClient, fetchImpl: typeof fetch) {
   return createRouter({ routeTree, context: { client, fetchImpl } })

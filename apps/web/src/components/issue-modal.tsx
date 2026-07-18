@@ -11,16 +11,9 @@ import {
 import { Markdown } from './markdown'
 import { useModalDialog } from './modal'
 import { subscribeToProjectEvents } from '../project-events'
+import { upsertById } from '../upsert'
 import { ensureWebActor } from '../web-actor'
 import type { ApiClient, Actor, Comment, Issue, Label } from '../api'
-
-// Coarse-snapshot convergence, same contract as the board (#33): upsert by id so a
-// redelivered comment.created is idempotent.
-function upsertById<T extends { id: number }>(list: T[], item: T): T[] {
-  return list.some((x) => x.id === item.id)
-    ? list.map((x) => (x.id === item.id ? item : x))
-    : [...list, item]
-}
 
 // The two text fields that autosave on blur are the only ones that can be "dirty":
 // selects/label chips write immediately on change, so a remote change to them just

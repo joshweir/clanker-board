@@ -13,8 +13,10 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 
 import { layoutBoard, type BoardColumn } from '../board-layout'
 import { IssueModal } from '../components/issue-modal'
+import { ProjectTabs } from '../components/project-tabs'
 import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from '../move'
-import { subscribeToProjectEvents } from '../project-events'
+import { upsertById } from '../upsert'
+import { useLiveIssues } from '../use-live-issues'
 import type { ApiClient, Issue, Label } from '../api'
 
 // Which issue the detail modal is showing: an existing card by id (kept fresh from
@@ -27,13 +29,6 @@ const route = getRouteApi('/projects/$slug')
 // freeform type). "task" is the sensible board default; the card can be re-typed
 // via the issue editor later.
 const DEFAULT_ISSUE_TYPE = 'task'
-
-// Coarse-snapshot convergence: upsert by id (idempotent), same contract as the
-// project list (#27). Card order comes from layoutBoard, and labels are looked up
-// by id, so list order here is irrelevant - keep it simple.
-function upsertById<T extends { id: number }>(list: T[], item: T): T[] {
-  return list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item]
-}
 
 // A drop persists as plain issue mutations - no move endpoint (#34): detach/attach
 // the swapped axis labels, then PATCH rank (and state across the Done boundary).
@@ -127,8 +122,6 @@ export function ProjectBoard() {
   const initial = route.useLoaderData()
   const { client, fetchImpl } = route.useRouteContext()
   const [board, setBoard] = useState(initial.board)
-  const [labels, setLabels] = useState(initial.labels)
-  const [issues, setIssues] = useState(initial.issues)
   const [toast, setToast] = useState<string | null>(null)
   const [modal, setModal] = useState<ActiveModal>(null)
 
@@ -137,21 +130,14 @@ export function ProjectBoard() {
   // optimistic write reconciles (#34).
   const suppressed = useRef<Set<number>>(new Set())
 
-  // The loader seeds board + labels + issues; the per-project SSE stream keeps the
-  // board live so an issue created/updated by an agent (or another tab) re-lays-out
-  // with no reload. A suppressed card's echoes are dropped until its drag settles.
-  useEffect(
-    () =>
-      subscribeToProjectEvents(fetchImpl, slug, {
-        onIssueChanged: (issue) =>
-          setIssues((prev) => (suppressed.current.has(issue.id) ? prev : upsertById(prev, issue))),
-        onIssueDeleted: (id) => setIssues((prev) => prev.filter((i) => i.id !== id)),
-        onLabelChanged: (label) => setLabels((prev) => upsertById(prev, label)),
-        onLabelDeleted: (id) => setLabels((prev) => prev.filter((l) => l.id !== id)),
-        onBoardChanged: (next) => setBoard(next),
-      }),
-    [fetchImpl, slug],
-  )
+  // The loader seeds board + labels + issues; the shared live-issues hook keeps
+  // labels/issues converging off the per-project SSE stream (the issues list uses
+  // the same hook, #37). A suppressed card's echoes are dropped until its drag
+  // settles, and board.changed re-lays-out the columns - both on the one stream.
+  const { issues, setIssues, labels } = useLiveIssues(fetchImpl, slug, initial, {
+    ignoreIssueChange: (issue) => suppressed.current.has(issue.id),
+    onBoardChanged: setBoard,
+  })
 
   // Auto-dismiss the revert toast so a transient failure does not linger.
   useEffect(() => {
@@ -212,7 +198,7 @@ export function ProjectBoard() {
         }
       })()
     },
-    [client, slug, labels],
+    [client, slug, labels, setIssues],
   )
 
   const onDragStart = useCallback(
@@ -343,7 +329,7 @@ export function ProjectBoard() {
         })
         .finally(release)
     },
-    [columns, board.columnAxis, labels, issues, client, slug, onColumnDragEnd],
+    [columns, board.columnAxis, labels, issues, client, slug, onColumnDragEnd, setIssues],
   )
 
   // One column section (header + top/bottom quick-add + its card Droppable). Real
@@ -415,6 +401,7 @@ export function ProjectBoard() {
       <header className="board-header">
         <Link to="/">← Projects</Link>
         <h1>{slug}</h1>
+        <ProjectTabs slug={slug} />
         <button type="button" className="new-issue" onClick={() => setModal({ kind: 'new' })}>
           New issue
         </button>
