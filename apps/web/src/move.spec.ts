@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import type { BoardColumn } from './board-layout'
-import { applyPlan, planMove, rankForDrop } from './move'
+import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from './move'
 import type { Issue, Label } from './api'
 
 const label = (id: number, name: string): Label => ({
@@ -94,6 +94,22 @@ describe('applyPlan', () => {
     const next = applyPlan(card, planMove(card, done, axis, 'a5'), labelById)
     expect(next.state).toBe('closed')
     expect(next.labels.map((l) => l.id)).toEqual([10])
+  })
+})
+
+describe('reorderColumnAxis', () => {
+  test('moves a column from its old index to the new one', () => {
+    expect(reorderColumnAxis([10, 20, 30], 0, 2)).toEqual([20, 30, 10])
+    expect(reorderColumnAxis([10, 20, 30], 2, 0)).toEqual([30, 10, 20])
+    expect(reorderColumnAxis([10, 20, 30], 1, 2)).toEqual([10, 30, 20])
+  })
+
+  test('a no-op move (same index) returns the axis unchanged', () => {
+    expect(reorderColumnAxis([10, 20, 30], 1, 1)).toEqual([10, 20, 30])
+  })
+
+  test('an out-of-range source index leaves the axis untouched', () => {
+    expect(reorderColumnAxis([10, 20], 5, 0)).toEqual([10, 20])
   })
 })
 

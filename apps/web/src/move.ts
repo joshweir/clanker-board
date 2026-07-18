@@ -24,6 +24,21 @@ export function rankForDrop(targetCards: Issue[], draggedId: number, destIndex: 
   return rankBetween(prev, next)
 }
 
+// Reorder the board's column axis (#35): move the axis label at `from` to `to`,
+// returning a new array. Only the real axis columns are reorderable, and they are
+// the first columns the board lays out (#33), so a column Draggable's index maps
+// straight onto its columnAxis index. The result PATCHes the WHOLE axis; other
+// clients converge off board.changed. An out-of-range `from` is a no-op guard.
+export function reorderColumnAxis(axis: number[], from: number, to: number): number[] {
+  const next = [...axis]
+  const [moved] = next.splice(from, 1)
+  if (moved === undefined) {
+    return axis
+  }
+  next.splice(to, 0, moved)
+  return next
+}
+
 // Special-column semantics:
 // - into Done: close, keep every label (so reopening restores the column).
 // - out of Done into a real/No-status column: reopen (state=open).

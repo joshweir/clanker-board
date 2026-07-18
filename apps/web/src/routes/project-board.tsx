@@ -2,20 +2,26 @@ import {
   DragDropContext,
   Draggable,
   Droppable,
+  type DraggableProvidedDragHandleProps,
   type DragStart,
   type DragUpdate,
   type DropResult,
   type ResponderProvided,
 } from '@hello-pangea/dnd'
 import { getRouteApi, Link } from '@tanstack/react-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 
 import { layoutBoard, type BoardColumn } from '../board-layout'
-import { applyPlan, planMove, rankForDrop } from '../move'
+import { applyPlan, planMove, rankForDrop, reorderColumnAxis } from '../move'
 import { subscribeToProjectEvents } from '../project-events'
-import type { ApiClient } from '../api'
+import type { ApiClient, Issue, Label } from '../api'
 
 const route = getRouteApi('/projects/$slug')
+
+// A quick-add creates an issue with this type (#28's create requires a non-empty,
+// freeform type). "task" is the sensible board default; the card can be re-typed
+// via the issue editor later.
+const DEFAULT_ISSUE_TYPE = 'task'
 
 // Coarse-snapshot convergence: upsert by id (idempotent), same contract as the
 // project list (#27). Card order comes from layoutBoard, and labels are looked up
@@ -61,8 +67,55 @@ async function persistMove(
   }
 }
 
+// The optimistic new card carries the column's bound axis label immediately, so a
+// quick-add lands in the right column before the label attach round-trips (#35).
+// A "No status" quick-add passes labelId === null and keeps the card label-less.
+function withAxisLabel(issue: Issue, labelId: number, labels: Label[]): Issue {
+  const label = labels.find((l) => l.id === labelId)
+  if (!label || issue.labels.some((l) => l.id === labelId)) {
+    return issue
+  }
+  return { ...issue, labels: [...issue.labels, label] }
+}
+
 const positionMessage = (title: string, column: BoardColumn, index: number): string =>
   `${title}, position ${index + 1} of ${column.cards.length} in ${column.title}`
+
+// Title-only inline quick-add (#35): Enter (the form submit) creates a card. A single
+// text input submits on Enter natively, so no button is needed. Rendered at the top
+// and bottom of every real/No-status column; each instance owns its own draft.
+function QuickAdd({
+  columnTitle,
+  position,
+  onAdd,
+}: {
+  columnTitle: string
+  position: 'top' | 'bottom'
+  onAdd: (title: string) => void
+}) {
+  const [title, setTitle] = useState('')
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const trimmed = title.trim()
+    if (trimmed.length === 0) {
+      return
+    }
+    onAdd(trimmed)
+    setTitle('')
+  }
+  return (
+    <form className="quick-add" onSubmit={onSubmit}>
+      <input
+        className="quick-add-input"
+        type="text"
+        value={title}
+        placeholder="Add a card"
+        aria-label={`Add a card to the ${position} of ${columnTitle}`}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)}
+      />
+    </form>
+  )
+}
 
 export function ProjectBoard() {
   const { slug } = route.useParams()
@@ -105,8 +158,68 @@ export function ProjectBoard() {
 
   const columns = layoutBoard(board.columnAxis, labels, issues)
 
+  // A quick-add posts the issue, optimistically shows it in the target column, then
+  // attaches the column's bound axis label (#35). The card's own echoes are suppressed
+  // until the attach settles so the label-less create echo cannot flicker it out of
+  // the target column, exactly as a drag suppresses its own intermediate echoes (#34).
+  const handleQuickAdd = useCallback(
+    (column: BoardColumn, title: string) => {
+      void (async () => {
+        let created: Issue | null = null
+        try {
+          const res = await client.api.projects[':slug'].issues.$post({
+            param: { slug },
+            json: { title, type: DEFAULT_ISSUE_TYPE },
+          })
+          if (!res.ok) {
+            throw new Error('create failed')
+          }
+          const body = await res.json()
+          if (!('number' in body)) {
+            throw new Error('create failed')
+          }
+          created = body
+          suppressed.current.add(created.id)
+          const optimistic = column.labelId === null ? created : withAxisLabel(created, column.labelId, labels)
+          setIssues((prev) => upsertById(prev, optimistic))
+          if (column.labelId !== null) {
+            const attach = await client.api.projects[':slug'].issues[':number'].labels[':labelId'].$put({
+              param: { slug, number: String(created.number), labelId: String(column.labelId) },
+            })
+            if (!attach.ok) {
+              throw new Error('attach failed')
+            }
+          }
+        } catch {
+          setToast(`Could not add a card to ${column.title}.`)
+          // Create may have succeeded while the label attach failed: reconcile the
+          // card to the server's actual (label-less) state so it does not linger in
+          // the wrong column. If the create itself failed, there is nothing to undo.
+          const c = created
+          if (c) {
+            setIssues((prev) => upsertById(prev, c))
+          }
+        } finally {
+          if (created) {
+            suppressed.current.delete(created.id)
+          }
+        }
+      })()
+    },
+    [client, slug, labels],
+  )
+
   const onDragStart = useCallback(
     (start: DragStart, provided: ResponderProvided) => {
+      if (start.type === 'column') {
+        const column = columns.find((c) => c.key === start.draggableId)
+        if (column) {
+          provided.announce(
+            `Picked up column ${column.title}, position ${start.source.index + 1} of ${board.columnAxis.length}. Use the left and right arrow keys to move, space to drop.`,
+          )
+        }
+        return
+      }
       const id = Number(start.draggableId)
       suppressed.current.add(id)
       const column = columns.find((c) => c.key === start.source.droppableId)
@@ -117,11 +230,22 @@ export function ProjectBoard() {
         )
       }
     },
-    [columns, issues],
+    [columns, issues, board.columnAxis.length],
   )
 
   const onDragUpdate = useCallback(
     (update: DragUpdate, provided: ResponderProvided) => {
+      if (update.type === 'column') {
+        if (!update.destination) {
+          provided.announce('Not over a valid position.')
+          return
+        }
+        const column = columns.find((c) => c.key === update.draggableId)
+        if (column) {
+          provided.announce(`Column ${column.title} is now in position ${update.destination.index + 1}.`)
+        }
+        return
+      }
       if (!update.destination) {
         provided.announce('Not over a column.')
         return
@@ -134,8 +258,42 @@ export function ProjectBoard() {
     [columns],
   )
 
+  const onColumnDragEnd = useCallback(
+    (result: DropResult, provided: ResponderProvided) => {
+      const { source, destination } = result
+      if (!destination || destination.index === source.index) {
+        provided.announce('Column move cancelled.')
+        return
+      }
+      const column = columns.find((c) => c.key === result.draggableId)
+      const nextAxis = reorderColumnAxis(board.columnAxis, source.index, destination.index)
+      const previous = board
+      // Optimistic re-layout, then PATCH the WHOLE axis; other open boards converge
+      // off board.changed (#33). Our own board.changed just re-sets the same axis
+      // (idempotent). On failure, restore the pre-move board and toast.
+      setBoard({ ...board, columnAxis: nextAxis })
+      provided.announce(`Column ${column?.title ?? ''} moved to position ${destination.index + 1}.`)
+      void client.api.projects[':slug'].board
+        .$patch({ param: { slug }, json: { columnAxis: nextAxis } })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error('axis patch failed')
+          }
+        })
+        .catch(() => {
+          setBoard(previous)
+          setToast('Could not reorder columns - reverted.')
+        })
+    },
+    [columns, board, client, slug],
+  )
+
   const onDragEnd = useCallback(
     (result: DropResult, provided: ResponderProvided) => {
+      if (result.type === 'column') {
+        onColumnDragEnd(result, provided)
+        return
+      }
       const id = Number(result.draggableId)
       const release = () => suppressed.current.delete(id)
       const { destination, source } = result
@@ -179,7 +337,59 @@ export function ProjectBoard() {
         })
         .finally(release)
     },
-    [columns, board.columnAxis, labels, issues, client, slug],
+    [columns, board.columnAxis, labels, issues, client, slug, onColumnDragEnd],
+  )
+
+  // One column section (header + top/bottom quick-add + its card Droppable). Real
+  // axis columns receive the column drag handle; the virtual columns pass null so
+  // only the reorderable axis columns are draggable (#35). Done omits quick-add.
+  const renderColumnSection = (column: BoardColumn, dragHandleProps: DraggableProvidedDragHandleProps | null) => (
+    <Droppable droppableId={column.key} key={column.key}>
+      {(dropProvided) => (
+        <section
+          ref={dropProvided.innerRef}
+          {...dropProvided.droppableProps}
+          className="board-column"
+          aria-label={column.title}
+        >
+          <div className="board-column-header">
+            {dragHandleProps ? (
+              <span className="column-drag-handle" {...dragHandleProps} aria-label={`Reorder ${column.title} column`}>
+                <span aria-hidden="true">⣿</span>
+              </span>
+            ) : null}
+            <h2>{column.title}</h2>
+            <span className="board-column-count" aria-hidden="true">
+              {column.cards.length}
+            </span>
+          </div>
+          {column.kind === 'done' ? null : (
+            <QuickAdd columnTitle={column.title} position="top" onAdd={(title) => handleQuickAdd(column, title)} />
+          )}
+          <ul className="board-cards">
+            {column.cards.map((card, index) => (
+              <Draggable draggableId={String(card.id)} index={index} key={card.id}>
+                {(dragProvided, snapshot) => (
+                  <li
+                    ref={dragProvided.innerRef}
+                    {...dragProvided.draggableProps}
+                    {...dragProvided.dragHandleProps}
+                    className={snapshot.isDragging ? 'board-card dragging' : 'board-card'}
+                  >
+                    <span className="board-card-key">{card.key}</span>
+                    <span className="board-card-title">{card.title}</span>
+                  </li>
+                )}
+              </Draggable>
+            ))}
+            {dropProvided.placeholder}
+          </ul>
+          {column.kind === 'done' ? null : (
+            <QuickAdd columnTitle={column.title} position="bottom" onAdd={(title) => handleQuickAdd(column, title)} />
+          )}
+        </section>
+      )}
+    </Droppable>
   )
 
   return (
@@ -189,45 +399,33 @@ export function ProjectBoard() {
         <h1>{slug}</h1>
       </header>
       <DragDropContext onDragStart={onDragStart} onDragUpdate={onDragUpdate} onDragEnd={onDragEnd}>
-        <div className="board-columns">
-          {columns.map((column) => (
-            <Droppable droppableId={column.key} key={column.key}>
-              {(dropProvided) => (
-                <section
-                  ref={dropProvided.innerRef}
-                  {...dropProvided.droppableProps}
-                  className="board-column"
-                  aria-label={column.title}
-                >
-                  <div className="board-column-header">
-                    <h2>{column.title}</h2>
-                    <span className="board-column-count" aria-hidden="true">
-                      {column.cards.length}
-                    </span>
-                  </div>
-                  <ul className="board-cards">
-                    {column.cards.map((card, index) => (
-                      <Draggable draggableId={String(card.id)} index={index} key={card.id}>
-                        {(dragProvided, snapshot) => (
-                          <li
-                            ref={dragProvided.innerRef}
-                            {...dragProvided.draggableProps}
-                            {...dragProvided.dragHandleProps}
-                            className={snapshot.isDragging ? 'board-card dragging' : 'board-card'}
-                          >
-                            <span className="board-card-key">{card.key}</span>
-                            <span className="board-card-title">{card.title}</span>
-                          </li>
-                        )}
-                      </Draggable>
-                    ))}
-                    {dropProvided.placeholder}
-                  </ul>
-                </section>
+        <Droppable droppableId="board" direction="horizontal" type="column">
+          {(boardProvided) => (
+            <div ref={boardProvided.innerRef} {...boardProvided.droppableProps} className="board-columns">
+              {columns.map((column, columnIndex) =>
+                // Only the real axis columns are reorderable; they are the first
+                // columns laid out, so their column index equals their columnAxis
+                // index. The virtual "No status" and "Done" columns render fixed (#35).
+                column.kind === 'axis' ? (
+                  <Draggable draggableId={column.key} index={columnIndex} key={column.key}>
+                    {(colProvided) => (
+                      <div
+                        ref={colProvided.innerRef}
+                        {...colProvided.draggableProps}
+                        className="board-column-draggable"
+                      >
+                        {renderColumnSection(column, colProvided.dragHandleProps)}
+                      </div>
+                    )}
+                  </Draggable>
+                ) : (
+                  renderColumnSection(column, null)
+                ),
               )}
-            </Droppable>
-          ))}
-        </div>
+              {boardProvided.placeholder}
+            </div>
+          )}
+        </Droppable>
       </DragDropContext>
       {toast === null ? null : (
         <div className="toast" role="alert">
