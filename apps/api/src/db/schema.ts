@@ -1,12 +1,12 @@
-import { sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm';
 import {
   integer,
   primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
-  type AnySQLiteColumn
-} from 'drizzle-orm/sqlite-core'
+  type AnySQLiteColumn,
+} from 'drizzle-orm/sqlite-core';
 
 // Drizzle tables are the single source of truth (#14): drizzle-zod derives the
 // base Zod schemas, routes refine them. slug = key.toLowerCase() is derived,
@@ -22,14 +22,14 @@ export const projects = sqliteTable(
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
     updatedAt: text('updated_at')
       .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
   },
-  table => [
+  (table) => [
     // Keys are regex-constrained to uppercase at the API boundary; this index
     // enforces case-insensitive uniqueness at the storage layer regardless.
-    uniqueIndex('projects_key_ci_unique').on(sql`lower(${table.key})`)
-  ]
-)
+    uniqueIndex('projects_key_ci_unique').on(sql`lower(${table.key})`),
+  ],
+);
 
 // Actors are instance-level identities (#18): caller-asserted human | agent, no
 // auth. They are NOT owned by a project, so deleting a project never deletes an
@@ -40,8 +40,8 @@ export const actors = sqliteTable('actors', {
   kind: text('kind', { enum: ['human', 'agent'] }).notNull(),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
-})
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+});
 
 // Issues belong to a project and carry a per-project sequential `number` (the
 // stable KEY-N handle). Deleting a project cascade-deletes its issues.
@@ -66,7 +66,7 @@ export const issues = sqliteTable(
     rank: text('rank').notNull(),
     // Single nullable assignee; nulled if the actor is ever removed.
     assigneeId: integer('assignee_id').references(() => actors.id, {
-      onDelete: 'set null'
+      onDelete: 'set null',
     }),
     // Single nullable parent (#30): work nests into a tree, an epic is just an
     // issue with children. Acyclicity is enforced at the API boundary. Deleting a
@@ -75,23 +75,23 @@ export const issues = sqliteTable(
     parentId: integer('parent_id').references(
       (): AnySQLiteColumn => issues.id,
       {
-        onDelete: 'set null'
-      }
+        onDelete: 'set null',
+      },
     ),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
     updatedAt: text('updated_at')
       .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
   },
-  table => [
+  (table) => [
     uniqueIndex('issues_project_number_unique').on(
       table.projectId,
-      table.number
-    )
-  ]
-)
+      table.number,
+    ),
+  ],
+);
 
 // Labels are strictly per-project (#24): defining "bug" in one project never
 // leaks into another. Deleting a project cascade-deletes its labels (and, via
@@ -110,15 +110,15 @@ export const labels = sqliteTable(
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
     updatedAt: text('updated_at')
       .notNull()
-      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
   },
-  table => [
+  (table) => [
     uniqueIndex('labels_project_name_ci_unique').on(
       table.projectId,
-      sql`lower(${table.name})`
-    )
-  ]
-)
+      sql`lower(${table.name})`,
+    ),
+  ],
+);
 
 // The Board is a stored view configuration (#24): exactly one per project, created
 // with the project. `column_axis` is an ordered list of label ids stored as JSON
@@ -138,8 +138,8 @@ export const boards = sqliteTable('boards', {
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
   updatedAt: text('updated_at')
     .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
-})
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+});
 
 // Many-to-many attachment of labels to issues (#24): several labels per issue to
 // capture cross-cutting state. Both foreign keys cascade, so deleting an issue
@@ -153,10 +153,10 @@ export const issueLabels = sqliteTable(
       .references(() => issues.id, { onDelete: 'cascade' }),
     labelId: integer('label_id')
       .notNull()
-      .references(() => labels.id, { onDelete: 'cascade' })
+      .references(() => labels.id, { onDelete: 'cascade' }),
   },
-  table => [primaryKey({ columns: [table.issueId, table.labelId] })]
-)
+  (table) => [primaryKey({ columns: [table.issueId, table.labelId] })],
+);
 
 // Blocking DAG (#30): an edge (issue_id, blocker_id) means issue_id is blocked by
 // blocker_id, so blocker_id must be done first. Cycles are rejected at the API
@@ -171,10 +171,10 @@ export const issueBlockedBy = sqliteTable(
       .references(() => issues.id, { onDelete: 'cascade' }),
     blockerId: integer('blocker_id')
       .notNull()
-      .references(() => issues.id, { onDelete: 'cascade' })
+      .references(() => issues.id, { onDelete: 'cascade' }),
   },
-  table => [primaryKey({ columns: [table.issueId, table.blockerId] })]
-)
+  (table) => [primaryKey({ columns: [table.issueId, table.blockerId] })],
+);
 
 // Discussion on an issue (#24): a flat, append-only, actor-attributed log - no
 // edit/delete, so there is no updatedAt. Deleting the issue (or, via issues, the
@@ -193,5 +193,5 @@ export const comments = sqliteTable('comments', {
   body: text('body').notNull(),
   createdAt: text('created_at')
     .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`)
-})
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+});

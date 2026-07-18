@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router';
 
 // The Board | Issues switcher shown on both project views (#37). Plain router Links
 // are keyboard-accessible anchors; activeProps marks the current view with
@@ -25,5 +25,5 @@ export function ProjectTabs({ slug }: { slug: string }) {
         Issues
       </Link>
     </nav>
-  )
+  );
 }

@@ -1,29 +1,29 @@
-import { getRouteApi, Link } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
-import type { Project } from '../api'
-import { CreateProjectModal } from '../components/create-project-modal'
-import { DeleteProjectModal } from '../components/delete-project-modal'
-import { subscribeToInstanceEvents } from '../events'
+import { getRouteApi, Link } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
+import type { Project } from '../api';
+import { CreateProjectModal } from '../components/create-project-modal';
+import { DeleteProjectModal } from '../components/delete-project-modal';
+import { subscribeToInstanceEvents } from '../events';
 
-const route = getRouteApi('/')
+const route = getRouteApi('/');
 
 type ActiveModal =
-  { kind: 'create' } | { kind: 'delete'; project: Project } | null
+  { kind: 'create' } | { kind: 'delete'; project: Project } | null;
 
 // Coarse-snapshot convergence: upsert by id (idempotent), keeping the server's
 // key order so a project created anywhere lands in the right place (#27).
 function upsertById(list: Project[], project: Project): Project[] {
-  const next = list.some(p => p.id === project.id)
-    ? list.map(p => (p.id === project.id ? project : p))
-    : [...list, project]
-  return next.sort((a, b) => a.key.localeCompare(b.key))
+  const next = list.some((p) => p.id === project.id)
+    ? list.map((p) => (p.id === project.id ? project : p))
+    : [...list, project];
+  return next.sort((a, b) => a.key.localeCompare(b.key));
 }
 
 export function ProjectsList() {
-  const initialProjects = route.useLoaderData()
-  const { client, fetchImpl } = route.useRouteContext()
-  const [projects, setProjects] = useState<Project[]>(initialProjects)
-  const [modal, setModal] = useState<ActiveModal>(null)
+  const initialProjects = route.useLoaderData();
+  const { client, fetchImpl } = route.useRouteContext();
+  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const [modal, setModal] = useState<ActiveModal>(null);
 
   // The loader seeds the initial list; the instance SSE stream keeps it live so
   // a create/rename/delete anywhere (agent or another tab) updates with no reload.
@@ -31,13 +31,15 @@ export function ProjectsList() {
   useEffect(
     () =>
       subscribeToInstanceEvents(fetchImpl, {
-        onChanged: project => setProjects(prev => upsertById(prev, project)),
-        onDeleted: id => setProjects(prev => prev.filter(p => p.id !== id))
+        onChanged: (project) =>
+          setProjects((prev) => upsertById(prev, project)),
+        onDeleted: (id) =>
+          setProjects((prev) => prev.filter((p) => p.id !== id)),
       }),
-    [fetchImpl]
-  )
+    [fetchImpl],
+  );
 
-  const closeModal = () => setModal(null)
+  const closeModal = () => setModal(null);
 
   return (
     <main className="projects">
@@ -59,7 +61,7 @@ export function ProjectsList() {
         </div>
       ) : (
         <ul className="project-list">
-          {projects.map(project => (
+          {projects.map((project) => (
             <li key={project.id} className="project-row">
               <Link to="/projects/$slug" params={{ slug: project.slug }}>
                 <span className="project-key">{project.key}</span>
@@ -93,5 +95,5 @@ export function ProjectsList() {
         />
       ) : null}
     </main>
-  )
+  );
 }

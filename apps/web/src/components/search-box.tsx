@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react'
-import type { ApiClient, Issue, Label, SearchHit } from '../api'
-import { jumpNumber, snippetSegments } from '../search'
-import { IssueModal } from './issue-modal'
+import { useEffect, useState } from 'react';
+import type { ApiClient, Issue, Label, SearchHit } from '../api';
+import { jumpNumber, snippetSegments } from '../search';
+import { IssueModal } from './issue-modal';
 
 // The matched-field badge label shown on each result.
 const MATCHED_LABEL: Record<SearchHit['matchedIn'], string> = {
   title: 'Title',
   body: 'Body',
-  comment: 'Comment'
-}
+  comment: 'Comment',
+};
 
 // Debounce delay before a keystroke fires the ranked search.
-const DEBOUNCE_MS = 250
+const DEBOUNCE_MS = 250;
 
 // Render an FTS snippet, escaping all text (React text nodes) and wrapping only the
 // server-marked runs in <mark> so raw issue/comment content can never inject markup.
@@ -23,19 +23,19 @@ function Snippet({ snippet }: { snippet: string }) {
           <mark key={i}>{seg.text}</mark>
         ) : (
           <span key={i}>{seg.text}</span>
-        )
+        ),
       )}
     </p>
-  )
+  );
 }
 
 interface SearchBoxProps {
-  client: ApiClient
-  fetchImpl: typeof fetch
-  slug: string
+  client: ApiClient;
+  fetchImpl: typeof fetch;
+  slug: string;
   // Feed the shared detail modal's sidebar pickers when a result is opened.
-  labels: Label[]
-  issues: Issue[]
+  labels: Label[];
+  issues: Issue[];
 }
 
 // Inline, Jira-style search (#39, replaces the dedicated Search view): a single field
@@ -48,91 +48,92 @@ export function SearchBox({
   fetchImpl,
   slug,
   labels,
-  issues
+  issues,
 }: SearchBoxProps) {
   // `input` is the immediate field value; `q` is its debounced counterpart that
   // actually drives the fetches, so typing does not fire a request per keystroke.
-  const [input, setInput] = useState('')
-  const [q, setQ] = useState('')
-  const [results, setResults] = useState<SearchHit[]>([])
-  const [total, setTotal] = useState(0)
-  const [jump, setJump] = useState<Issue | null>(null)
-  const [selected, setSelected] = useState<Issue | null>(null)
+  const [input, setInput] = useState('');
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<SearchHit[]>([]);
+  const [total, setTotal] = useState(0);
+  const [jump, setJump] = useState<Issue | null>(null);
+  const [selected, setSelected] = useState<Issue | null>(null);
 
   // Debounce the field into `q`. An empty field clears immediately (no request).
   useEffect(() => {
     if (input.trim().length === 0) {
-      setQ('')
-      return
+      setQ('');
+      return;
     }
-    const timer = setTimeout(() => setQ(input), DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [input])
+    const timer = setTimeout(() => setQ(input), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [input]);
 
   // Run the ranked search whenever the debounced query changes. A per-effect `stale`
   // guard drops a slower earlier response so results always reflect the latest query.
   useEffect(() => {
     if (q.trim().length === 0) {
-      setResults([])
-      setTotal(0)
-      return
+      setResults([]);
+      setTotal(0);
+      return;
     }
-    let stale = false
+    let stale = false;
     void (async () => {
       const res = await client.api.projects[':slug'].search.$get({
         param: { slug },
-        query: { q }
-      })
+        query: { q },
+      });
       if (stale || !res.ok) {
-        return
+        return;
       }
-      const body = await res.json()
+      const body = await res.json();
       if (!stale && 'results' in body) {
-        setResults(body.results)
-        setTotal(body.total)
+        setResults(body.results);
+        setTotal(body.total);
       }
-    })()
+    })();
     return () => {
-      stale = true
-    }
-  }, [client, slug, q])
+      stale = true;
+    };
+  }, [client, slug, q]);
 
   // Resolve an all-digit query to a real issue for the jump row; no row if it does not
   // exist. Mirrors the search effect's stale guard.
   useEffect(() => {
-    const number = jumpNumber(q)
+    const number = jumpNumber(q);
     if (number === null) {
-      setJump(null)
-      return
+      setJump(null);
+      return;
     }
-    let stale = false
+    let stale = false;
     void (async () => {
       const res = await client.api.projects[':slug'].issues[':number'].$get({
-        param: { slug, number: String(number) }
-      })
+        param: { slug, number: String(number) },
+      });
       if (stale) {
-        return
+        return;
       }
-      const body = res.ok ? await res.json() : null
-      setJump(body && 'number' in body ? body : null)
-    })()
+      const body = res.ok ? await res.json() : null;
+      setJump(body && 'number' in body ? body : null);
+    })();
     return () => {
-      stale = true
-    }
-  }, [client, slug, q])
+      stale = true;
+    };
+  }, [client, slug, q]);
 
   const clear = () => {
-    setInput('')
-    setQ('')
-    setResults([])
-    setTotal(0)
-    setJump(null)
-  }
+    setInput('');
+    setQ('');
+    setResults([]);
+    setTotal(0);
+    setJump(null);
+  };
 
-  const hasText = input.trim().length > 0
+  const hasText = input.trim().length > 0;
   // Only show "no matches" once the debounced query has caught up and produced nothing,
   // never while a keystroke is still settling.
-  const showEmpty = q.trim().length > 0 && results.length === 0 && jump === null
+  const showEmpty =
+    q.trim().length > 0 && results.length === 0 && jump === null;
 
   return (
     <div className="search-box-inline">
@@ -144,7 +145,7 @@ export function SearchBox({
           type="search"
           aria-label="Search issues and comments"
           value={input}
-          onChange={event => setInput(event.target.value)}
+          onChange={(event) => setInput(event.target.value)}
           placeholder="Search"
         />
         {hasText ? (
@@ -171,7 +172,7 @@ export function SearchBox({
             </button>
           ) : null}
           <ul className="search-results" aria-label="Search results">
-            {results.map(hit => (
+            {results.map((hit) => (
               <li key={hit.issue.id} className="search-result">
                 <button
                   type="button"
@@ -212,5 +213,5 @@ export function SearchBox({
         />
       ) : null}
     </div>
-  )
+  );
 }

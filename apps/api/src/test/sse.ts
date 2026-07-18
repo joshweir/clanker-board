@@ -2,49 +2,49 @@
 // for a named event, with a safety timeout so a broken stream fails fast instead
 // of hanging the suite. Used by the events / issues route specs.
 export interface SseEvent {
-  event: string
-  data: unknown
+  event: string;
+  data: unknown;
 }
 
 const parseFrame = (frame: string): SseEvent | null => {
-  let event = 'message'
-  const dataLines: string[] = []
+  let event = 'message';
+  const dataLines: string[] = [];
   for (const line of frame.split('\n')) {
     if (line.startsWith('event:')) {
-      event = line.slice(6).trim()
+      event = line.slice(6).trim();
     } else if (line.startsWith('data:')) {
-      dataLines.push(line.slice(5).trim())
+      dataLines.push(line.slice(5).trim());
     }
   }
   if (dataLines.length === 0) {
-    return null
+    return null;
   }
-  const data: unknown = JSON.parse(dataLines.join('\n'))
-  return { event, data }
-}
+  const data: unknown = JSON.parse(dataLines.join('\n'));
+  return { event, data };
+};
 
 export async function* readEvents(res: Response): AsyncGenerator<SseEvent> {
-  const body = res.body
+  const body = res.body;
   if (!body) {
-    return
+    return;
   }
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
   for (;;) {
-    const { done, value } = await reader.read()
+    const { done, value } = await reader.read();
     if (done) {
-      return
+      return;
     }
-    buffer += decoder.decode(value, { stream: true })
-    let boundary = buffer.indexOf('\n\n')
+    buffer += decoder.decode(value, { stream: true });
+    let boundary = buffer.indexOf('\n\n');
     while (boundary !== -1) {
-      const frame = parseFrame(buffer.slice(0, boundary))
-      buffer = buffer.slice(boundary + 2)
+      const frame = parseFrame(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
       if (frame) {
-        yield frame
+        yield frame;
       }
-      boundary = buffer.indexOf('\n\n')
+      boundary = buffer.indexOf('\n\n');
     }
   }
 }
@@ -53,26 +53,26 @@ export async function* readEvents(res: Response): AsyncGenerator<SseEvent> {
 export async function nextEventOfType(
   events: AsyncGenerator<SseEvent>,
   type: string,
-  budgetMs = 2000
+  budgetMs = 2000,
 ): Promise<SseEvent> {
-  let timer: ReturnType<typeof setTimeout> | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () => reject(new Error(`timed out waiting for ${type}`)),
-      budgetMs
-    )
-  })
+      budgetMs,
+    );
+  });
   try {
     for (;;) {
-      const result = await Promise.race([events.next(), timeout])
+      const result = await Promise.race([events.next(), timeout]);
       if (result.done) {
-        throw new Error('stream ended before event')
+        throw new Error('stream ended before event');
       }
       if (result.value.event === type) {
-        return result.value
+        return result.value;
       }
     }
   } finally {
-    clearTimeout(timer)
+    clearTimeout(timer);
   }
 }

@@ -5,21 +5,21 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type ReactNode
-} from 'react'
-import type { Actor, ApiClient, Comment, Issue, Label } from '../api'
-import { subscribeToProjectEvents } from '../project-events'
-import { upsertById } from '../upsert'
-import { ensureWebActor } from '../web-actor'
-import { Markdown } from './markdown'
-import { useModalDialog } from './modal'
+  type ReactNode,
+} from 'react';
+import type { Actor, ApiClient, Comment, Issue, Label } from '../api';
+import { subscribeToProjectEvents } from '../project-events';
+import { upsertById } from '../upsert';
+import { ensureWebActor } from '../web-actor';
+import { Markdown } from './markdown';
+import { useModalDialog } from './modal';
 
 // The free-text fields that autosave on blur are the only ones that can be "dirty":
 // selects/label chips write immediately on change, so a remote change to them just
 // upserts. Title/body/type are held while focused so an incoming issue.changed cannot
 // clobber what the user is typing (#36).
-type DirtyField = 'title' | 'body' | 'type'
-type BodyMode = 'edit' | 'preview'
+type DirtyField = 'title' | 'body' | 'type';
+type BodyMode = 'edit' | 'preview';
 
 // A shared body editor with an Edit|Preview markdown toggle (#36). Preview renders
 // through the safe Markdown component. Used in both create and edit modes.
@@ -30,15 +30,15 @@ function BodyEditor({
   onChange,
   onFocus,
   onBlur,
-  hint
+  hint,
 }: {
-  value: string
-  mode: BodyMode
-  onModeChange: (mode: BodyMode) => void
-  onChange: (value: string) => void
-  onFocus?: () => void
-  onBlur?: () => void
-  hint?: ReactNode
+  value: string;
+  mode: BodyMode;
+  onModeChange: (mode: BodyMode) => void;
+  onChange: (value: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  hint?: ReactNode;
 }) {
   return (
     <div className="body-editor">
@@ -69,7 +69,7 @@ function BodyEditor({
           className="body-textarea"
           aria-label="Body"
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           onFocus={onFocus}
           onBlur={onBlur}
           rows={8}
@@ -85,19 +85,19 @@ function BodyEditor({
       )}
       {hint}
     </div>
-  )
+  );
 }
 
 interface IssueModalProps {
-  client: ApiClient
-  fetchImpl: typeof fetch
-  slug: string
+  client: ApiClient;
+  fetchImpl: typeof fetch;
+  slug: string;
   // The issue to edit, or null to open in create mode (#36).
-  issue: Issue | null
-  labels: Label[]
+  issue: Issue | null;
+  labels: Label[];
   // Sibling issues, for the parent/blocker pickers (snapshot at open time).
-  issues: Issue[]
-  onClose: () => void
+  issues: Issue[];
+  onClose: () => void;
 }
 
 // The single editing surface (#36): a two-column detail modal (header / main /
@@ -110,69 +110,69 @@ export function IssueModal({
   issue,
   labels,
   issues,
-  onClose
+  onClose,
 }: IssueModalProps) {
-  const dialogRef = useModalDialog()
-  const headingId = useId()
+  const dialogRef = useModalDialog();
+  const headingId = useId();
 
-  const [current, setCurrent] = useState<Issue | null>(issue)
-  const [title, setTitle] = useState(issue?.title ?? '')
-  const [body, setBody] = useState(issue?.body ?? '')
-  const [type, setType] = useState(issue?.type ?? 'task')
-  const [bodyMode, setBodyMode] = useState<BodyMode>('edit')
+  const [current, setCurrent] = useState<Issue | null>(issue);
+  const [title, setTitle] = useState(issue?.title ?? '');
+  const [body, setBody] = useState(issue?.body ?? '');
+  const [type, setType] = useState(issue?.type ?? 'task');
+  const [bodyMode, setBodyMode] = useState<BodyMode>('edit');
   const [remote, setRemote] = useState<{
-    title?: boolean
-    body?: boolean
-    type?: boolean
-  }>({})
-  const [comments, setComments] = useState<Comment[]>([])
-  const [actors, setActors] = useState<Actor[]>([])
-  const [commentDraft, setCommentDraft] = useState('')
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+    title?: boolean;
+    body?: boolean;
+    type?: boolean;
+  }>({});
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [actors, setActors] = useState<Actor[]>([]);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Refs mirror the latest values so the once-subscribed SSE handler reads current
   // state without re-subscribing on every keystroke.
-  const currentRef = useRef(current)
-  currentRef.current = current
-  const titleRef = useRef(title)
-  titleRef.current = title
-  const bodyRef = useRef(body)
-  bodyRef.current = body
-  const typeRef = useRef(type)
-  typeRef.current = type
-  const dirtyRef = useRef<Set<DirtyField>>(new Set())
-  const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  const currentRef = useRef(current);
+  currentRef.current = current;
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const bodyRef = useRef(body);
+  bodyRef.current = body;
+  const typeRef = useRef(type);
+  typeRef.current = type;
+  const dirtyRef = useRef<Set<DirtyField>>(new Set());
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const loadActors = useCallback(async () => {
-    setActors(await (await client.api.actors.$get()).json())
-  }, [client])
+    setActors(await (await client.api.actors.$get()).json());
+  }, [client]);
 
   // Load actors once (comment authors + assignee options).
   useEffect(() => {
-    void loadActors()
-  }, [loadActors])
+    void loadActors();
+  }, [loadActors]);
 
   // Load this issue's comments whenever the issue identity changes (including the
   // create -> edit transition, which starts with an empty log).
-  const number = current?.number
+  const number = current?.number;
   useEffect(() => {
     if (number === undefined) {
-      setComments([])
-      return
+      setComments([]);
+      return;
     }
     void (async () => {
       const res = await client.api.projects[':slug'].issues[
         ':number'
       ].comments.$get({
-        param: { slug, number: String(number) }
-      })
+        param: { slug, number: String(number) },
+      });
       if (res.ok) {
-        setComments(await res.json())
+        setComments(await res.json());
       }
-    })()
-  }, [client, slug, number])
+    })();
+  }, [client, slug, number]);
 
   // Subscribe once to the project stream. issue.changed upserts every non-dirty
   // field live and flags a dirty field as "changed remotely" instead of clobbering
@@ -180,178 +180,178 @@ export function IssueModal({
   useEffect(
     () =>
       subscribeToProjectEvents(fetchImpl, slug, {
-        onIssueChanged: next => {
-          const cur = currentRef.current
+        onIssueChanged: (next) => {
+          const cur = currentRef.current;
           if (!cur || next.id !== cur.id) {
-            return
+            return;
           }
-          setCurrent(next)
+          setCurrent(next);
           if (dirtyRef.current.has('title')) {
             if (next.title !== titleRef.current) {
-              setRemote(r => ({ ...r, title: true }))
+              setRemote((r) => ({ ...r, title: true }));
             }
           } else {
-            setTitle(next.title)
+            setTitle(next.title);
           }
           if (dirtyRef.current.has('body')) {
             if (next.body !== bodyRef.current) {
-              setRemote(r => ({ ...r, body: true }))
+              setRemote((r) => ({ ...r, body: true }));
             }
           } else {
-            setBody(next.body)
+            setBody(next.body);
           }
           if (dirtyRef.current.has('type')) {
             if (next.type !== typeRef.current) {
-              setRemote(r => ({ ...r, type: true }))
+              setRemote((r) => ({ ...r, type: true }));
             }
           } else {
-            setType(next.type)
+            setType(next.type);
           }
         },
-        onIssueDeleted: id => {
+        onIssueDeleted: (id) => {
           if (currentRef.current && id === currentRef.current.id) {
-            onCloseRef.current()
+            onCloseRef.current();
           }
         },
-        onCommentCreated: comment => {
-          const cur = currentRef.current
+        onCommentCreated: (comment) => {
+          const cur = currentRef.current;
           if (cur && comment.issueId === cur.id) {
-            setComments(prev => upsertById(prev, comment))
+            setComments((prev) => upsertById(prev, comment));
           }
-        }
+        },
       }),
-    [fetchImpl, slug]
-  )
+    [fetchImpl, slug],
+  );
 
   // One PATCH per field (#36): absent fields stay unchanged. The returned snapshot
   // reconciles local state; our own issue.changed echo then upserts idempotently.
   const patchIssue = useCallback(
     async (json: {
-      title?: string
-      body?: string
-      type?: string
-      state?: 'open' | 'closed'
-      assigneeId?: number | null
+      title?: string;
+      body?: string;
+      type?: string;
+      state?: 'open' | 'closed';
+      assigneeId?: number | null;
     }) => {
-      const cur = currentRef.current
+      const cur = currentRef.current;
       if (!cur) {
-        return
+        return;
       }
       const res = await client.api.projects[':slug'].issues[':number'].$patch({
         param: { slug, number: String(cur.number) },
-        json
-      })
+        json,
+      });
       if (!res.ok) {
-        setError('Could not save your change.')
-        return
+        setError('Could not save your change.');
+        return;
       }
-      const updated = await res.json()
+      const updated = await res.json();
       if ('number' in updated) {
-        setCurrent(updated)
+        setCurrent(updated);
       }
     },
-    [client, slug]
-  )
+    [client, slug],
+  );
 
   const commitTitle = () => {
-    dirtyRef.current.delete('title')
-    setRemote(r => ({ ...r, title: false }))
-    const cur = currentRef.current
+    dirtyRef.current.delete('title');
+    setRemote((r) => ({ ...r, title: false }));
+    const cur = currentRef.current;
     if (cur && title.trim().length > 0 && title !== cur.title) {
-      void patchIssue({ title })
+      void patchIssue({ title });
     }
-  }
+  };
 
   const commitBody = () => {
-    dirtyRef.current.delete('body')
-    setRemote(r => ({ ...r, body: false }))
-    const cur = currentRef.current
+    dirtyRef.current.delete('body');
+    setRemote((r) => ({ ...r, body: false }));
+    const cur = currentRef.current;
     if (cur && body !== cur.body) {
-      void patchIssue({ body })
+      void patchIssue({ body });
     }
-  }
+  };
 
   const commitType = () => {
-    dirtyRef.current.delete('type')
-    setRemote(r => ({ ...r, type: false }))
-    const cur = currentRef.current
-    const trimmed = type.trim()
+    dirtyRef.current.delete('type');
+    setRemote((r) => ({ ...r, type: false }));
+    const cur = currentRef.current;
+    const trimmed = type.trim();
     // Type is required server-side (min 1); an empty edit reverts to the current value.
     if (cur && trimmed.length > 0 && trimmed !== cur.type) {
-      void patchIssue({ type: trimmed })
+      void patchIssue({ type: trimmed });
     } else if (cur && trimmed.length === 0) {
-      setType(cur.type)
+      setType(cur.type);
     }
-  }
+  };
 
   const createIssue = (e: FormEvent) => {
-    e.preventDefault()
-    const trimmed = title.trim()
+    e.preventDefault();
+    const trimmed = title.trim();
     if (trimmed.length === 0) {
-      return
+      return;
     }
     void (async () => {
       const res = await client.api.projects[':slug'].issues.$post({
         param: { slug },
-        json: { title: trimmed, type: type.trim() || 'task', body }
-      })
+        json: { title: trimmed, type: type.trim() || 'task', body },
+      });
       if (!res.ok) {
-        setError('Could not create the issue.')
-        return
+        setError('Could not create the issue.');
+        return;
       }
-      const created = await res.json()
+      const created = await res.json();
       if ('number' in created) {
         // Transition into edit mode on the created issue; subsequent edits are
         // patches and the SSE subscription now matches this id.
-        setCurrent(created)
+        setCurrent(created);
       }
-    })()
-  }
+    })();
+  };
 
   const deleteIssue = () => {
-    const cur = currentRef.current
+    const cur = currentRef.current;
     if (!cur) {
-      return
+      return;
     }
     void (async () => {
       const res = await client.api.projects[':slug'].issues[':number'].$delete({
-        param: { slug, number: String(cur.number) }
-      })
+        param: { slug, number: String(cur.number) },
+      });
       if (res.ok) {
-        onClose()
+        onClose();
       } else {
-        setError('Could not delete this issue.')
+        setError('Could not delete this issue.');
       }
-    })()
-  }
+    })();
+  };
 
   const submitComment = (e: FormEvent) => {
-    e.preventDefault()
-    const cur = currentRef.current
-    const text = commentDraft.trim()
+    e.preventDefault();
+    const cur = currentRef.current;
+    const text = commentDraft.trim();
     if (!cur || text.length === 0) {
-      return
+      return;
     }
     void (async () => {
       try {
-        const actorId = await ensureWebActor(client)
+        const actorId = await ensureWebActor(client);
         const res = await client.api.projects[':slug'].issues[
           ':number'
         ].comments.$post({
           param: { slug, number: String(cur.number) },
-          json: { actorId, body: text }
-        })
+          json: { actorId, body: text },
+        });
         if (!res.ok) {
-          throw new Error('comment failed')
+          throw new Error('comment failed');
         }
-        setCommentDraft('')
+        setCommentDraft('');
         // Keep author names resolvable (the Web actor may be newly created).
-        await loadActors()
+        await loadActors();
       } catch {
-        setError('Could not add your comment.')
+        setError('Could not add your comment.');
       }
-    })()
-  }
+    })();
+  };
 
   // Sidebar relationship writes: each publishes issue.changed, so current converges
   // live off the stream (no optimistic local mutation needed). The shared path param
@@ -359,71 +359,71 @@ export function IssueModal({
   // return null in the impossible "no current issue" case so callers stay guarded.
   const relationshipError = (message: string) => (res: Response) => {
     if (!res.ok) {
-      setError(message)
+      setError(message);
     }
-  }
+  };
 
   const issueParam = (): { slug: string; number: string } | null => {
-    const cur = currentRef.current
-    return cur ? { slug, number: String(cur.number) } : null
-  }
+    const cur = currentRef.current;
+    return cur ? { slug, number: String(cur.number) } : null;
+  };
 
   const attachLabel = (labelId: number) => {
-    const param = issueParam()
+    const param = issueParam();
     if (param) {
       void client.api.projects[':slug'].issues[':number'].labels[':labelId']
         .$put({ param: { ...param, labelId: String(labelId) } })
-        .then(relationshipError('Could not attach the label.'))
+        .then(relationshipError('Could not attach the label.'));
     }
-  }
+  };
 
   const detachLabel = (labelId: number) => {
-    const param = issueParam()
+    const param = issueParam();
     if (param) {
       void client.api.projects[':slug'].issues[':number'].labels[':labelId']
         .$delete({ param: { ...param, labelId: String(labelId) } })
-        .then(relationshipError('Could not remove the label.'))
+        .then(relationshipError('Could not remove the label.'));
     }
-  }
+  };
 
   const setParentTo = (parentNumber: number) => {
-    const param = issueParam()
+    const param = issueParam();
     if (param) {
       void client.api.projects[':slug'].issues[':number'].parent
         .$put({ param, json: { parentNumber } })
-        .then(relationshipError('Could not set the parent.'))
+        .then(relationshipError('Could not set the parent.'));
     }
-  }
+  };
 
   const clearParent = () => {
-    const param = issueParam()
+    const param = issueParam();
     if (param) {
       void client.api.projects[':slug'].issues[':number'].parent
         .$delete({ param })
-        .then(relationshipError('Could not clear the parent.'))
+        .then(relationshipError('Could not clear the parent.'));
     }
-  }
+  };
 
   const addBlocker = (blockerNumber: number) => {
-    const param = issueParam()
+    const param = issueParam();
     if (param) {
       void client.api.projects[':slug'].issues[':number']['blocked-by'][
         ':blockerNumber'
       ]
         .$put({ param: { ...param, blockerNumber: String(blockerNumber) } })
-        .then(relationshipError('Could not add the blocker.'))
+        .then(relationshipError('Could not add the blocker.'));
     }
-  }
+  };
 
-  const attachedIds = new Set((current?.labels ?? []).map(l => l.id))
-  const availableLabels = labels.filter(l => !attachedIds.has(l.id))
-  const candidateIssues = issues.filter(i => !current || i.id !== current.id)
+  const attachedIds = new Set((current?.labels ?? []).map((l) => l.id));
+  const availableLabels = labels.filter((l) => !attachedIds.has(l.id));
+  const candidateIssues = issues.filter((i) => !current || i.id !== current.id);
   const parent = current
-    ? issues.find(i => i.id === current.parentId)
-    : undefined
+    ? issues.find((i) => i.id === current.parentId)
+    : undefined;
 
   const authorName = (actorId: number) =>
-    actors.find(a => a.id === actorId)?.name ?? 'Unknown'
+    actors.find((a) => a.id === actorId)?.name ?? 'Unknown';
 
   return (
     // Click-away is a mouse-only enhancement; keyboard users close with Escape (the
@@ -434,15 +434,15 @@ export function IssueModal({
       ref={dialogRef}
       className="modal issue-modal"
       aria-labelledby={headingId}
-      onCancel={e => {
-        e.preventDefault()
-        onClose()
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
       }}
       // Click-away close: a click landing on the dialog element itself is the
       // backdrop/padding (content sits in child elements), so close on it.
-      onClick={e => {
+      onClick={(e) => {
         if (e.target === e.currentTarget) {
-          onClose()
+          onClose();
         }
       }}
     >
@@ -497,7 +497,7 @@ export function IssueModal({
                 className="issue-title-input"
                 value={title}
                 onFocus={() => dirtyRef.current.add('title')}
-                onChange={e => setTitle(e.target.value)}
+                onChange={(e) => setTitle(e.target.value)}
                 onBlur={commitTitle}
               />
               {remote.title ? (
@@ -529,7 +529,7 @@ export function IssueModal({
             <section className="comments" aria-label="Comments">
               <h3>Comments</h3>
               <ul className="comment-list">
-                {comments.map(comment => (
+                {comments.map((comment) => (
                   <li key={comment.id} className="comment">
                     <div className="comment-meta">
                       <span className="comment-author">
@@ -548,7 +548,7 @@ export function IssueModal({
                   aria-label="Add a comment"
                   placeholder="Add a comment"
                   value={commentDraft}
-                  onChange={e => setCommentDraft(e.target.value)}
+                  onChange={(e) => setCommentDraft(e.target.value)}
                   rows={3}
                 />
                 <button
@@ -567,7 +567,7 @@ export function IssueModal({
               <input
                 value={type}
                 onFocus={() => dirtyRef.current.add('type')}
-                onChange={e => setType(e.target.value)}
+                onChange={(e) => setType(e.target.value)}
                 onBlur={commitType}
               />
               {remote.type ? (
@@ -581,9 +581,9 @@ export function IssueModal({
               <span>State</span>
               <select
                 value={current.state}
-                onChange={e =>
+                onChange={(e) =>
                   void patchIssue({
-                    state: e.target.value === 'closed' ? 'closed' : 'open'
+                    state: e.target.value === 'closed' ? 'closed' : 'open',
                   })
                 }
               >
@@ -596,15 +596,15 @@ export function IssueModal({
               <span>Assignee</span>
               <select
                 value={current.assigneeId ?? ''}
-                onChange={e =>
+                onChange={(e) =>
                   void patchIssue({
                     assigneeId:
-                      e.target.value === '' ? null : Number(e.target.value)
+                      e.target.value === '' ? null : Number(e.target.value),
                   })
                 }
               >
                 <option value="">Unassigned</option>
-                {actors.map(actor => (
+                {actors.map((actor) => (
                   <option key={actor.id} value={actor.id}>
                     {actor.name}
                   </option>
@@ -618,7 +618,7 @@ export function IssueModal({
                 className="label-chips"
                 aria-labelledby={`${headingId}-labels`}
               >
-                {current.labels.map(label => (
+                {current.labels.map((label) => (
                   <li key={label.id} className="label-chip">
                     {label.name}
                     <button
@@ -635,14 +635,14 @@ export function IssueModal({
                 <select
                   aria-label="Add a label"
                   value=""
-                  onChange={e => {
+                  onChange={(e) => {
                     if (e.target.value !== '') {
-                      attachLabel(Number(e.target.value))
+                      attachLabel(Number(e.target.value));
                     }
                   }}
                 >
                   <option value="">Add a label…</option>
-                  {availableLabels.map(label => (
+                  {availableLabels.map((label) => (
                     <option key={label.id} value={label.id}>
                       {label.name}
                     </option>
@@ -656,16 +656,16 @@ export function IssueModal({
               <select
                 aria-label="Parent"
                 value={parent ? String(parent.number) : ''}
-                onChange={e => {
+                onChange={(e) => {
                   if (e.target.value === '') {
-                    clearParent()
+                    clearParent();
                   } else {
-                    setParentTo(Number(e.target.value))
+                    setParentTo(Number(e.target.value));
                   }
                 }}
               >
                 <option value="">No parent</option>
-                {candidateIssues.map(i => (
+                {candidateIssues.map((i) => (
                   <option key={i.id} value={i.number}>
                     {i.key} {i.title}
                   </option>
@@ -688,14 +688,14 @@ export function IssueModal({
               <select
                 aria-label="Add a blocker"
                 value=""
-                onChange={e => {
+                onChange={(e) => {
                   if (e.target.value !== '') {
-                    addBlocker(Number(e.target.value))
+                    addBlocker(Number(e.target.value));
                   }
                 }}
               >
                 <option value="">Add a blocker…</option>
-                {candidateIssues.map(i => (
+                {candidateIssues.map((i) => (
                   <option key={i.id} value={i.number}>
                     {i.key} {i.title}
                   </option>
@@ -712,12 +712,12 @@ export function IssueModal({
               className="issue-title-input"
               value={title}
               autoFocus
-              onChange={e => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
             />
           </label>
           <label className="field">
             <span>Type</span>
-            <input value={type} onChange={e => setType(e.target.value)} />
+            <input value={type} onChange={(e) => setType(e.target.value)} />
           </label>
           <div className="field">
             <span>Body</span>
@@ -739,5 +739,5 @@ export function IssueModal({
         </form>
       )}
     </dialog>
-  )
+  );
 }

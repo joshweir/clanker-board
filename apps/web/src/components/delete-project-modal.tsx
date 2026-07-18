@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import type { ApiClient, Project } from '../api'
-import { Modal } from './modal'
+import { useState } from 'react';
+import type { ApiClient, Project } from '../api';
+import { Modal } from './modal';
 
 interface DeleteProjectModalProps {
-  client: ApiClient
-  project: Project
-  onClose: () => void
-  onDeleted: () => void
+  client: ApiClient;
+  project: Project;
+  onClose: () => void;
+  onDeleted: () => void;
 }
 
 // Danger modal: the user must type the project key exactly to arm deletion, so
@@ -15,34 +15,34 @@ export function DeleteProjectModal({
   client,
   project,
   onClose,
-  onDeleted
+  onDeleted,
 }: DeleteProjectModalProps) {
-  const [confirmation, setConfirmation] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const armed = confirmation === project.key
+  const [confirmation, setConfirmation] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const armed = confirmation === project.key;
 
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!armed) {
-      return
+      return;
     }
-    setError(null)
-    setSubmitting(true)
+    setError(null);
+    setSubmitting(true);
     const res = await client.api.projects[':slug'].$delete({
-      param: { slug: project.slug }
-    })
-    setSubmitting(false)
+      param: { slug: project.slug },
+    });
+    setSubmitting(false);
     if (res.ok) {
-      onDeleted()
-      return
+      onDeleted();
+      return;
     }
-    setError('Could not delete project')
-  }
+    setError('Could not delete project');
+  };
 
   return (
     <Modal title={`Delete ${project.name}`} onClose={onClose}>
-      <form onSubmit={event => void submit(event)}>
+      <form onSubmit={(event) => void submit(event)}>
         <p>
           This permanently deletes the project and all of its issues, comments,
           labels, and boards. Type <strong>{project.key}</strong> to confirm.
@@ -53,7 +53,7 @@ export function DeleteProjectModal({
             name="confirmation"
             value={confirmation}
             autoComplete="off"
-            onChange={e => setConfirmation(e.target.value)}
+            onChange={(e) => setConfirmation(e.target.value)}
           />
         </label>
         {error ? (
@@ -75,5 +75,5 @@ export function DeleteProjectModal({
         </div>
       </form>
     </Modal>
-  )
+  );
 }

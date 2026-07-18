@@ -1,10 +1,10 @@
 /** @type {import('prettier').Config} */
 export default {
-  semi: false,
+  semi: true,
   singleQuote: true,
-  arrowParens: 'avoid',
+  arrowParens: 'always',
   tabWidth: 2,
-  trailingComma: 'none',
+  trailingComma: 'all',
   endOfLine: 'lf',
   useTabs: false,
   plugins: ['@ianvs/prettier-plugin-sort-imports'],
@@ -12,6 +12,6 @@ export default {
     '<BUILTIN_MODULES>',
     '<THIRD_PARTY_MODULES>',
     '^@clanker/(.*)$',
-    '^[./]'
-  ]
-}
+    '^[./]',
+  ],
+};

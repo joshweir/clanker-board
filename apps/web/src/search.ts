@@ -6,18 +6,18 @@
 // integer range. Leading zeros still resolve ("007" -> jump to #7), which is
 // harmless - the jump row only appears if that number is a real issue.
 export function jumpNumber(query: string): number | null {
-  const trimmed = query.trim()
+  const trimmed = query.trim();
   if (!/^\d+$/.test(trimmed)) {
-    return null
+    return null;
   }
-  const n = Number(trimmed)
-  return Number.isSafeInteger(n) && n > 0 ? n : null
+  const n = Number(trimmed);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
 // One run of snippet text, flagged as a highlighted match or plain surrounding text.
 export interface SnippetSegment {
-  text: string
-  mark: boolean
+  text: string;
+  mark: boolean;
 }
 
 // Split a server FTS snippet into segments. The API wraps matched terms in
@@ -25,16 +25,16 @@ export interface SnippetSegment {
 // runs as React text nodes (escaped) means raw user content can never inject markup -
 // only these two literal delimiters are ever treated as structure.
 export function snippetSegments(snippet: string): SnippetSegment[] {
-  const segments: SnippetSegment[] = []
-  let mark = false
+  const segments: SnippetSegment[] = [];
+  let mark = false;
   for (const part of snippet.split(/(<mark>|<\/mark>)/)) {
     if (part === '<mark>') {
-      mark = true
+      mark = true;
     } else if (part === '</mark>') {
-      mark = false
+      mark = false;
     } else if (part.length > 0) {
-      segments.push({ text: part, mark })
+      segments.push({ text: part, mark });
     }
   }
-  return segments
+  return segments;
 }

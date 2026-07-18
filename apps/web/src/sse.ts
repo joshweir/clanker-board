@@ -9,35 +9,35 @@ export async function readEventStream(
   fetchImpl: typeof fetch,
   path: string,
   signal: AbortSignal,
-  onEvent: (event: string, data: unknown) => void
+  onEvent: (event: string, data: unknown) => void,
 ): Promise<void> {
-  let response: Response
+  let response: Response;
   try {
     response = await fetchImpl(path, {
       signal,
-      headers: { accept: 'text/event-stream' }
-    })
+      headers: { accept: 'text/event-stream' },
+    });
   } catch {
-    return // aborted before the stream opened
+    return; // aborted before the stream opened
   }
   if (!response.body) {
-    return
+    return;
   }
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
   try {
     for (;;) {
-      const { done, value } = await reader.read()
+      const { done, value } = await reader.read();
       if (done) {
-        return
+        return;
       }
-      buffer += decoder.decode(value, { stream: true })
-      let boundary = buffer.indexOf('\n\n')
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.indexOf('\n\n');
       while (boundary !== -1) {
-        dispatchFrame(buffer.slice(0, boundary), onEvent)
-        buffer = buffer.slice(boundary + 2)
-        boundary = buffer.indexOf('\n\n')
+        dispatchFrame(buffer.slice(0, boundary), onEvent);
+        buffer = buffer.slice(boundary + 2);
+        boundary = buffer.indexOf('\n\n');
       }
     }
   } catch {
@@ -47,26 +47,26 @@ export async function readEventStream(
 
 function dispatchFrame(
   frame: string,
-  onEvent: (event: string, data: unknown) => void
+  onEvent: (event: string, data: unknown) => void,
 ): void {
-  let event = 'message'
-  const dataLines: string[] = []
+  let event = 'message';
+  const dataLines: string[] = [];
   for (const line of frame.split('\n')) {
     if (line.startsWith('event:')) {
-      event = line.slice(6).trim()
+      event = line.slice(6).trim();
     } else if (line.startsWith('data:')) {
-      dataLines.push(line.slice(5).trim())
+      dataLines.push(line.slice(5).trim());
     }
   }
   if (dataLines.length === 0) {
-    return
+    return;
   }
   // A single malformed or contract-drifted frame (bad JSON, failed zod parse in
   // onEvent) must not tear down the whole live stream - log it and keep reading.
   try {
-    const data: unknown = JSON.parse(dataLines.join('\n'))
-    onEvent(event, data)
+    const data: unknown = JSON.parse(dataLines.join('\n'));
+    onEvent(event, data);
   } catch (error) {
-    console.warn('clanker-board: discarding unparseable SSE frame', error)
+    console.warn('clanker-board: discarding unparseable SSE frame', error);
   }
 }

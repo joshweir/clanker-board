@@ -1,4 +1,10 @@
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
+import {
+  useEffect,
+  useId,
+  useRef,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 // Drive a native <dialog> as a modal: focus trap, Escape-to-close, backdrop, and
 // focus restoration on close all come from the platform (a11y is not simplified).
@@ -7,37 +13,37 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 // exposes the dialog role and its contents. Shared by the simple Modal below and
 // the wider issue modal (#36).
 export function useModalDialog(): RefObject<HTMLDialogElement | null> {
-  const ref = useRef<HTMLDialogElement>(null)
+  const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    const dialog = ref.current
+    const dialog = ref.current;
     if (!dialog) {
-      return
+      return;
     }
     if (typeof dialog.showModal === 'function') {
-      dialog.showModal()
+      dialog.showModal();
     } else {
-      dialog.setAttribute('open', '')
+      dialog.setAttribute('open', '');
     }
     return () => {
       if (typeof dialog.close === 'function') {
-        dialog.close()
+        dialog.close();
       } else {
-        dialog.removeAttribute('open')
+        dialog.removeAttribute('open');
       }
-    }
-  }, [])
-  return ref
+    };
+  }, []);
+  return ref;
 }
 
 interface ModalProps {
-  title: string
-  onClose: () => void
-  children: ReactNode
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
 }
 
 export function Modal({ title, onClose, children }: ModalProps) {
-  const ref = useModalDialog()
-  const titleId = useId()
+  const ref = useModalDialog();
+  const titleId = useId();
 
   return (
     // Click-away is a mouse-only enhancement; keyboard users close with Escape (the
@@ -48,19 +54,19 @@ export function Modal({ title, onClose, children }: ModalProps) {
       ref={ref}
       className="modal"
       aria-labelledby={titleId}
-      onCancel={e => {
-        e.preventDefault()
-        onClose()
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
       }}
       // Click-away close: a click on the dialog element itself is the backdrop/padding.
-      onClick={e => {
+      onClick={(e) => {
         if (e.target === e.currentTarget) {
-          onClose()
+          onClose();
         }
       }}
     >
       <h2 id={titleId}>{title}</h2>
       {children}
     </dialog>
-  )
+  );
 }

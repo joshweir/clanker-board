@@ -1,6 +1,6 @@
-import type { Issue, Label } from './api'
-import type { BoardColumn } from './board-layout'
-import { rankBetween } from './rank'
+import type { Issue, Label } from './api';
+import type { BoardColumn } from './board-layout';
+import { rankBetween } from './rank';
 
 // A board drop persists as plain issue mutations - there is no move endpoint (#34).
 // planMove turns "card dropped into column at rank R" into the exact set of label
@@ -8,11 +8,11 @@ import { rankBetween } from './rank'
 // crossed). The board places a card by the FIRST axis label it carries (#33), so a
 // column change swaps that axis label: detach the old axis label(s), attach the new.
 export interface MovePlan {
-  rank: string
-  attach: number[]
-  detach: number[]
+  rank: string;
+  attach: number[];
+  detach: number[];
   // Present only when the move crosses the Done boundary; absent = leave state be.
-  state?: Issue['state']
+  state?: Issue['state'];
 }
 
 // Compute the rank of a drop: strictly between the cards that will bracket it once
@@ -20,12 +20,12 @@ export interface MovePlan {
 export function rankForDrop(
   targetCards: Issue[],
   draggedId: number,
-  destIndex: number
+  destIndex: number,
 ): string {
-  const without = targetCards.filter(card => card.id !== draggedId)
-  const prev = without[destIndex - 1]?.rank ?? null
-  const next = without[destIndex]?.rank ?? null
-  return rankBetween(prev, next)
+  const without = targetCards.filter((card) => card.id !== draggedId);
+  const prev = without[destIndex - 1]?.rank ?? null;
+  const next = without[destIndex]?.rank ?? null;
+  return rankBetween(prev, next);
 }
 
 // Reorder the board's column axis (#35): move the axis label at `from` to `to`,
@@ -36,15 +36,15 @@ export function rankForDrop(
 export function reorderColumnAxis(
   axis: number[],
   from: number,
-  to: number
+  to: number,
 ): number[] {
-  const next = [...axis]
-  const [moved] = next.splice(from, 1)
+  const next = [...axis];
+  const [moved] = next.splice(from, 1);
   if (moved === undefined) {
-    return axis
+    return axis;
   }
-  next.splice(to, 0, moved)
-  return next
+  next.splice(to, 0, moved);
+  return next;
 }
 
 // Special-column semantics:
@@ -58,37 +58,37 @@ export function planMove(
   issue: Issue,
   target: BoardColumn,
   columnAxis: number[],
-  newRank: string
+  newRank: string,
 ): MovePlan {
-  const axisSet = new Set(columnAxis)
+  const axisSet = new Set(columnAxis);
   const currentAxisLabelIds = issue.labels
-    .filter(label => axisSet.has(label.id))
-    .map(label => label.id)
-  const plan: MovePlan = { rank: newRank, attach: [], detach: [] }
+    .filter((label) => axisSet.has(label.id))
+    .map((label) => label.id);
+  const plan: MovePlan = { rank: newRank, attach: [], detach: [] };
 
   if (target.kind === 'done') {
     if (issue.state !== 'closed') {
-      plan.state = 'closed'
+      plan.state = 'closed';
     }
-    return plan
+    return plan;
   }
 
   // Any move out of a real/No-status column implies the card is open.
   if (issue.state === 'closed') {
-    plan.state = 'open'
+    plan.state = 'open';
   }
 
   if (target.kind === 'no-status' || target.labelId === null) {
-    plan.detach = currentAxisLabelIds
-    return plan
+    plan.detach = currentAxisLabelIds;
+    return plan;
   }
 
-  const targetId = target.labelId
-  plan.detach = currentAxisLabelIds.filter(id => id !== targetId)
-  if (!issue.labels.some(label => label.id === targetId)) {
-    plan.attach = [targetId]
+  const targetId = target.labelId;
+  plan.detach = currentAxisLabelIds.filter((id) => id !== targetId);
+  if (!issue.labels.some((label) => label.id === targetId)) {
+    plan.attach = [targetId];
   }
-  return plan
+  return plan;
 }
 
 // The optimistic issue after a plan is applied, so the board reflects the move
@@ -96,15 +96,20 @@ export function planMove(
 export function applyPlan(
   issue: Issue,
   plan: MovePlan,
-  labelById: Map<number, Label>
+  labelById: Map<number, Label>,
 ): Issue {
-  const detached = new Set(plan.detach)
-  let labels = issue.labels.filter(label => !detached.has(label.id))
+  const detached = new Set(plan.detach);
+  let labels = issue.labels.filter((label) => !detached.has(label.id));
   for (const id of plan.attach) {
-    const label = labelById.get(id)
-    if (label && !labels.some(existing => existing.id === id)) {
-      labels = [...labels, label]
+    const label = labelById.get(id);
+    if (label && !labels.some((existing) => existing.id === id)) {
+      labels = [...labels, label];
     }
   }
-  return { ...issue, rank: plan.rank, state: plan.state ?? issue.state, labels }
+  return {
+    ...issue,
+    rank: plan.rank,
+    state: plan.state ?? issue.state,
+    labels,
+  };
 }

@@ -1,4 +1,4 @@
-import { generateKeyBetween } from 'fractional-indexing'
+import { generateKeyBetween } from 'fractional-indexing';
 
 // Fractional ranks are lexicographically-ordered strings so an issue can be
 // reordered by rewriting one row (no renumbering). The server only ever needs to
@@ -14,5 +14,5 @@ import { generateKeyBetween } from 'fractional-indexing'
 // Returns a rank string that sorts strictly after `prev`, or a mid-range start
 // when the project has no issues yet.
 export function rankAfter(prev: string | null): string {
-  return generateKeyBetween(prev === '' ? null : prev, null)
+  return generateKeyBetween(prev === '' ? null : prev, null);
 }

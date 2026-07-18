@@ -1,4 +1,4 @@
-import { generateKeyBetween } from 'fractional-indexing'
+import { generateKeyBetween } from 'fractional-indexing';
 
 // Client-owned in-between rank computation for board drags (#34). The server
 // seeds ranks with the same fractional-indexing scheme (apps/api/src/domain/rank.ts),
@@ -8,5 +8,5 @@ import { generateKeyBetween } from 'fractional-indexing'
 // ponytail: no rebalancer - keys lengthen as cards are repeatedly inserted between
 // the same pair. Add a periodic column rebalance if key length ever matters.
 export function rankBetween(prev: string | null, next: string | null): string {
-  return generateKeyBetween(prev, next)
+  return generateKeyBetween(prev, next);
 }

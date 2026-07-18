@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod';
 
 // Filter state lives ONLY in the URL query (#38): a filtered board/list view is
 // shareable and per-viewer, and never mutates shared server state. These are the
@@ -20,20 +20,20 @@ export const filterFields = {
     .catch(undefined),
   // blocked / ready are boolean toggles over the issue's derived state (#30).
   blocked: z.boolean().optional().catch(undefined),
-  ready: z.boolean().optional().catch(undefined)
-}
+  ready: z.boolean().optional().catch(undefined),
+};
 
-export const filterSearchSchema = z.object(filterFields)
-export type FilterSearch = z.infer<typeof filterSearchSchema>
+export const filterSearchSchema = z.object(filterFields);
+export type FilterSearch = z.infer<typeof filterSearchSchema>;
 
 // The normalized axes the predicate and UI work with: inactive axes filled in, so
 // callers never juggle undefined. `Filters` is the read-time view of `FilterSearch`.
 export interface Filters {
-  type: string[]
-  label: number[]
-  assignee: 'unassigned' | number | undefined
-  blocked: boolean
-  ready: boolean
+  type: string[];
+  label: number[];
+  assignee: 'unassigned' | number | undefined;
+  blocked: boolean;
+  ready: boolean;
 }
 
 // The all-inactive filter set - what Clear-all resets the axes to. Route view
@@ -44,8 +44,8 @@ export const emptyFilters: Filters = {
   label: [],
   assignee: undefined,
   blocked: false,
-  ready: false
-}
+  ready: false,
+};
 
 // Normalize the URL search into the working filter set (absent -> inactive default).
 export function toFilters(search: FilterSearch): Filters {
@@ -54,8 +54,8 @@ export function toFilters(search: FilterSearch): Filters {
     label: search.label ?? [],
     assignee: search.assignee,
     blocked: search.blocked ?? false,
-    ready: search.ready ?? false
-  }
+    ready: search.ready ?? false,
+  };
 }
 
 // The URL search shape for a set of filters: inactive axes collapse to `undefined`
@@ -67,18 +67,18 @@ export function toSearchValues(filters: Filters): FilterSearch {
     label: filters.label.length > 0 ? filters.label : undefined,
     assignee: filters.assignee,
     blocked: filters.blocked ? true : undefined,
-    ready: filters.ready ? true : undefined
-  }
+    ready: filters.ready ? true : undefined,
+  };
 }
 
 // The minimal shape the predicate reads. `Issue` satisfies it structurally, so the
 // predicate and its tests never need to build a full issue read model.
 export interface FilterableIssue {
-  type: string
-  labels: { id: number }[]
-  assigneeId: number | null
-  blocked: boolean
-  ready: boolean
+  type: string;
+  labels: { id: number }[];
+  assigneeId: number | null;
+  blocked: boolean;
+  ready: boolean;
 }
 
 // AND across axes, OR within an axis (#38). An inactive axis (empty list / undefined
@@ -86,33 +86,33 @@ export interface FilterableIssue {
 // it yields nothing (an issue is never both) - correct per the axis semantics.
 export function matchesFilters(
   issue: FilterableIssue,
-  filters: Filters
+  filters: Filters,
 ): boolean {
   if (filters.type.length > 0 && !filters.type.includes(issue.type)) {
-    return false
+    return false;
   }
   if (
     filters.label.length > 0 &&
-    !issue.labels.some(label => filters.label.includes(label.id))
+    !issue.labels.some((label) => filters.label.includes(label.id))
   ) {
-    return false
+    return false;
   }
   if (filters.assignee === 'unassigned' && issue.assigneeId !== null) {
-    return false
+    return false;
   }
   if (
     typeof filters.assignee === 'number' &&
     issue.assigneeId !== filters.assignee
   ) {
-    return false
+    return false;
   }
   if (filters.blocked && !issue.blocked) {
-    return false
+    return false;
   }
   if (filters.ready && !issue.ready) {
-    return false
+    return false;
   }
-  return true
+  return true;
 }
 
 // Whether any filter axis is active - drives the Clear-all control's visibility.
@@ -124,5 +124,5 @@ export function isFilterActive(filters: Filters): boolean {
     filters.assignee !== undefined ||
     filters.blocked ||
     filters.ready
-  )
+  );
 }
