@@ -43,6 +43,13 @@
       "when": 1784335806195,
       "tag": "0005_previous_edwin_jarvis",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784336000000,
+      "tag": "0006_search_fts5",
+      "breakpoints": true
     }
   ]
 }

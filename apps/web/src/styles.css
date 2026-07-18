@@ -645,3 +645,101 @@ button.danger {
   padding: 0.1rem 0.45rem;
   font-size: 0.75rem;
 }
+
+/* Full-text search view (#39): a query box, a jump-to-issue row, and ranked results
+   grouped one per issue with a matched-field badge and a highlighted snippet. */
+.search {
+  padding: 1rem 1.5rem;
+}
+
+.search-box {
+  margin: 1rem 0;
+}
+
+.search-box input {
+  width: 100%;
+}
+
+.search-jump {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--accent, #4c6ef5);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent, #4c6ef5) 8%, transparent);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.search-jump:hover {
+  background: color-mix(in srgb, var(--accent, #4c6ef5) 16%, transparent);
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.search-result {
+  border: 1px solid var(--border, #d0d7de);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+}
+
+.search-result-open {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.search-result-open:hover .search-result-title {
+  text-decoration: underline;
+}
+
+.search-result-key {
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+}
+
+.search-result-title {
+  flex: 1;
+}
+
+.search-result-matched {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.7;
+  border: 1px solid var(--border, #d0d7de);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+}
+
+.search-snippet {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.search-snippet mark {
+  background: color-mix(in srgb, var(--accent, #4c6ef5) 25%, transparent);
+  border-radius: 2px;
+}
+
+.search-empty,
+.search-more {
+  opacity: 0.7;
+  font-size: 0.85rem;
+}

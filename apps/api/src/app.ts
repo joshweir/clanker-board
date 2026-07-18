@@ -11,6 +11,7 @@ import { issuesRouter } from './routes/issues'
 import { labelsRouter } from './routes/labels'
 import { projectsRouter } from './routes/projects'
 import { relationshipsRouter } from './routes/relationships'
+import { searchRouter } from './routes/search'
 
 // All API routes live under /api; /openapi.json + /docs stay top-level (#17)
 // so the SPA fallback / dev proxy have one clean rule.
@@ -37,6 +38,7 @@ export function createApp(db: Db) {
     .route('/api', labelsRouter(db, bus))
     .route('/api', relationshipsRouter(db, bus))
     .route('/api', commentsRouter(db, bus))
+    .route('/api', searchRouter(db))
     .route('/api', boardRouter(db, bus))
     .route('/api', actorsRouter(db))
     .route('/api', eventsRouter(db, bus))

@@ -5,6 +5,7 @@ import { filterFields } from './filters'
 import type { ApiClient } from './api'
 import { ProjectBoard } from './routes/project-board'
 import { ProjectIssues } from './routes/project-issues'
+import { ProjectSearch } from './routes/project-search'
 import { ProjectsList } from './routes/projects-list'
 
 // Both project tabs share the filter axes (#38) and add one view control of their
@@ -99,7 +100,36 @@ const projectIssuesRoute = createRoute({
   component: ProjectIssues,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute, projectRoute, projectIssuesRoute])
+// Full-text search over a project's issues + comments (#39). Its q lives in the URL
+// (shareable, like the filter axes) and its loader seeds only what the shared detail
+// modal needs - the project's labels (chip picker) and issues (parent/blocker pickers);
+// the ranked results themselves are fetched live from the search endpoint per query.
+const projectSearchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$slug/search',
+  validateSearch: z.object({ q: z.string().optional().catch(undefined) }),
+  loader: async ({ context, params }) => {
+    const param = { slug: params.slug }
+    const [labelsRes, issuesRes] = await Promise.all([
+      context.client.api.projects[':slug'].labels.$get({ param }),
+      context.client.api.projects[':slug'].issues.$get({ param }),
+    ])
+    const labels = await labelsRes.json()
+    const issues = await issuesRes.json()
+    if (!Array.isArray(labels) || !Array.isArray(issues)) {
+      throw new Error('Project not found')
+    }
+    return { labels, issues }
+  },
+  component: ProjectSearch,
+})
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  projectRoute,
+  projectIssuesRoute,
+  projectSearchRoute,
+])
 
 export function createAppRouter(client: ApiClient, fetchImpl: typeof fetch) {
   return createRouter({ routeTree, context: { client, fetchImpl } })

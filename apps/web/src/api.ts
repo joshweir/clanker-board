@@ -38,3 +38,11 @@ export type Comment = InferResponseType<
 // Instance-level identities (#28), caller-asserted (no auth). The modal attributes
 // comments and the assignee to an actor.
 export type Actor = InferResponseType<ApiClient['api']['actors']['$get']>[number]
+
+// Full-text search results (#39): grouped one-per-issue, each with the matched field
+// and a highlighted snippet. The 200 body pins the success shape past the 404 union.
+export type SearchResults = InferResponseType<
+  ApiClient['api']['projects'][':slug']['search']['$get'],
+  200
+>
+export type SearchHit = SearchResults['results'][number]
