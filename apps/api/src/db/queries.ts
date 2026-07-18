@@ -1,7 +1,7 @@
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm'
 
 import type { Db } from './client'
-import { issueBlockedBy, issueLabels, issues, labels, projects } from './schema'
+import { comments, issueBlockedBy, issueLabels, issues, labels, projects } from './schema'
 
 type ProjectRow = typeof projects.$inferSelect
 type IssueRow = typeof issues.$inferSelect
@@ -77,6 +77,20 @@ export const toIssue = (db: Db, row: IssueRow, projectKey: string) => {
 }
 
 export type IssueSnapshot = ReturnType<typeof toIssue>
+
+// A comment snapshot is just its row (#24): a flat, append-only log entry with no
+// derived fields. Shared by the comment routes and the SSE payloads.
+export type CommentSnapshot = typeof comments.$inferSelect
+
+// An issue's comments in chronological (append) order. id is monotonic, so it
+// gives a stable tiebreak when two comments share a created_at timestamp.
+export const commentsForIssue = (db: Db, issueId: number): CommentSnapshot[] =>
+  db
+    .select()
+    .from(comments)
+    .where(eq(comments.issueId, issueId))
+    .orderBy(asc(comments.createdAt), asc(comments.id))
+    .all()
 
 export const findIssue = (db: Db, projectId: number, number: number) =>
   db
