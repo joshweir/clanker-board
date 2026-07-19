@@ -85,6 +85,7 @@ export function IssueDetailPage() {
           issue={issue}
           labels={labels}
           issues={issues}
+          showKey={false}
           onDeleted={() =>
             void navigate({ to: '/projects/$slug', params: { slug } })
           }

@@ -31,6 +31,9 @@ interface IssueDetailProps {
   // Called after this issue is deleted (here or remotely): the modal closes, the
   // standalone page navigates back to the board.
   onDeleted: () => void;
+  // The toolbar id link is shown in the modal (its only ticket reference); the
+  // standalone page hides it because the breadcrumb already carries the id.
+  showKey?: boolean;
 }
 
 // The shared editing surface for an existing issue (#36, #40): title and description
@@ -44,6 +47,7 @@ export function IssueDetail({
   labels,
   issues,
   onDeleted,
+  showKey = true,
 }: IssueDetailProps) {
   const headingId = useId();
 
@@ -345,13 +349,14 @@ export function IssueDetail({
   return (
     <>
       <div className="issue-detail-toolbar">
-        <IssueKeyLink
-          slug={slug}
-          number={current.number}
-          issueKey={current.key}
-          showCopy
-        />
-        <span className="issue-type-badge">{current.type}</span>
+        {showKey ? (
+          <IssueKeyLink
+            slug={slug}
+            number={current.number}
+            issueKey={current.key}
+            showCopy
+          />
+        ) : null}
         <div className="issue-detail-actions">
           {confirmingDelete ? (
             <span className="delete-confirm">
