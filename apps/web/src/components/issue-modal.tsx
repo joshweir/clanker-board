@@ -62,10 +62,8 @@ export function IssueModal({
   };
 
   return (
-    // Click-away is a mouse-only enhancement; keyboard users close with Escape (the
-    // dialog's native onCancel below), so keyboard parity is intact. The a11y rules
-    // can't see that, hence the scoped disable.
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events
+    // The modal fills the viewport, so there is no backdrop to click away on: it
+    // closes only via the X button or Escape (the dialog's native onCancel).
     <dialog
       ref={dialogRef}
       className="modal issue-modal"
@@ -73,13 +71,6 @@ export function IssueModal({
       onCancel={(e) => {
         e.preventDefault();
         onClose();
-      }}
-      // Click-away close: a click landing on the dialog element itself is the
-      // backdrop/padding (content sits in child elements), so close on it.
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
       }}
     >
       <button
