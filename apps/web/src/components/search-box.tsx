@@ -139,7 +139,19 @@ export function SearchBox({
     <div className="search-box-inline">
       <div className="search-field">
         <span className="search-icon" aria-hidden="true">
-          🔍
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
         </span>
         <input
           type="search"

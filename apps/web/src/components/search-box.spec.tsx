@@ -74,12 +74,10 @@ describe('inline search box', () => {
       }),
     );
 
+    expect(await screen.findByRole('link', { name: 'DEMO-1' })).toBeDefined();
     expect(
-      await screen.findByRole('heading', { name: 'DEMO-1' }),
+      screen.getByRole('heading', { name: 'Fix the login page' }),
     ).toBeDefined();
-    expect(screen.getByLabelText<HTMLInputElement>('Title').value).toBe(
-      'Fix the login page',
-    );
     // The field keeps its text and the results list stays mounted behind the modal.
     expect(input.value).toBe('login');
     expect(screen.getByRole('list', { name: 'Search results' })).toBeDefined();
@@ -115,13 +113,9 @@ describe('inline search box', () => {
     });
     await user.click(jump);
 
-    // The shared modal opens on DEMO-2, not DEMO-1.
-    expect(
-      await screen.findByRole('heading', { name: 'DEMO-2' }),
-    ).toBeDefined();
-    expect(screen.getByLabelText<HTMLInputElement>('Title').value).toBe(
-      'Second issue',
-    );
+    // The shared surface opens on DEMO-2, not DEMO-1.
+    expect(await screen.findByRole('link', { name: 'DEMO-2' })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Second issue' })).toBeDefined();
   });
 
   test('no jump row when the number does not resolve to an issue', async () => {

@@ -4,8 +4,9 @@ import type { ApiClient } from '../api';
 import { renderApp } from '../test/harness';
 
 // Seam 2: the real SPA + issue modal against a real in-process api emitting real SSE
-// (#36). Per-field autosave, dirty-field protection, and live comment append all run
-// over the exact zod-openapi contract the browser and agents consume - no mocks.
+// (#36, #40). Title/description are Jira-style inline edits (view -> ✓/✗); the other
+// fields autosave. Dirty-field protection and live comment append all run over the
+// exact zod-openapi contract the browser and agents consume - no mocks.
 
 const slug = 'demo';
 const param = { slug };
@@ -72,48 +73,74 @@ async function openCardModal() {
   });
   await router.navigate({ to: '/projects/$slug', params: { slug } });
   await user.click(await screen.findByText('Wire the board'));
-  await screen.findByLabelText('Title');
+  await screen.findByLabelText('Edit title');
   return { client, user, number };
 }
 
+// Enter the title inline editor (click the view region) and return its input.
+async function openTitleEditor(
+  user: Awaited<ReturnType<typeof openCardModal>>['user'],
+) {
+  await user.click(screen.getByLabelText('Edit title'));
+  return screen.getByLabelText<HTMLInputElement>('Title');
+}
+
 describe('issue modal', () => {
-  test('autosaves a field on blur with a per-field PATCH', async () => {
+  test('title inline edit commits on ✓, and only on ✓', async () => {
     const { client, user, number } = await openCardModal();
 
-    const title = screen.getByLabelText<HTMLInputElement>('Title');
+    const title = await openTitleEditor(user);
     await user.clear(title);
-    await user.type(title, 'Renamed on blur');
-    // Tab away to blur the field, which triggers the autosave.
-    await user.tab();
+    await user.type(title, 'Renamed inline');
 
+    // Sticky: clicking elsewhere in the modal does not save or leave edit mode.
+    await user.click(screen.getByRole('heading', { name: 'Comments' }));
+    expect(screen.getByLabelText<HTMLInputElement>('Title').value).toBe(
+      'Renamed inline',
+    );
+    expect((await readIssue(client, number)).title).toBe('Wire the board');
+
+    // The ✓ button commits the change and returns to the title view.
+    await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(async () => {
-      expect((await readIssue(client, number)).title).toBe('Renamed on blur');
+      expect((await readIssue(client, number)).title).toBe('Renamed inline');
     });
   });
 
-  test('a dirty field is not clobbered by a remote change; other fields upsert live', async () => {
+  test('title inline edit ✗ discards the draft', async () => {
     const { client, user, number } = await openCardModal();
 
-    // Start editing the title (now dirty) without blurring.
-    const title = screen.getByLabelText<HTMLInputElement>('Title');
+    const title = await openTitleEditor(user);
+    await user.clear(title);
+    await user.type(title, 'Should not stick');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    // Back to the view showing the original title; nothing was saved.
+    expect(await screen.findByLabelText('Edit title')).toBeDefined();
+    expect((await readIssue(client, number)).title).toBe('Wire the board');
+  });
+
+  test('an edited title is not clobbered by a remote change; the description updates live', async () => {
+    const { client, user, number } = await openCardModal();
+
+    // Start editing the title (now protected) without saving.
+    const title = await openTitleEditor(user);
     await user.clear(title);
     await user.type(title, 'My local edit');
 
-    // A remote change lands for both the dirty title and the untouched body.
+    // A remote change lands for both the edited title and the untouched description.
     await client.api.projects[':slug'].issues[':number'].$patch({
       param: { slug, number: String(number) },
       json: { title: 'Remote title', body: 'Remote body' },
     });
 
-    // The dirty title keeps the user's text and surfaces the "changed remotely" hint.
+    // The edited title keeps the user's text and surfaces the "changed remotely" hint.
     await screen.findByText(/changed remotely/i);
-    expect(title.value).toBe('My local edit');
-    // The non-dirty body upserts live from the same event.
-    await waitFor(() => {
-      expect(screen.getByLabelText<HTMLTextAreaElement>('Body').value).toBe(
-        'Remote body',
-      );
-    });
+    expect(screen.getByLabelText<HTMLInputElement>('Title').value).toBe(
+      'My local edit',
+    );
+    // The description is not being edited, so it renders the remote body live.
+    expect(await screen.findByText('Remote body')).toBeDefined();
   });
 
   test('a comment created elsewhere appends live', async () => {
@@ -143,9 +170,10 @@ describe('issue modal', () => {
     expect(await screen.findByText('My first note')).toBeDefined();
   });
 
-  test('the body editor toggles between Edit and Preview markdown', async () => {
+  test('the description editor toggles between Edit and Preview markdown', async () => {
     const { user } = await openCardModal();
 
+    await user.click(screen.getByLabelText('Edit description'));
     await user.type(screen.getByLabelText('Body'), '**bold**');
     await user.click(screen.getByRole('tab', { name: 'Preview' }));
 
@@ -182,7 +210,7 @@ describe('issue modal', () => {
     });
     await router.navigate({ to: '/projects/$slug', params: { slug } });
     await user.click(await screen.findByText('Wire the board'));
-    await screen.findByLabelText('Title');
+    await screen.findByLabelText('Edit title');
     // Scope to the modal - the board's FilterBar also has Ready/Blocked controls.
     const modal = within(screen.getByRole('dialog'));
 
@@ -215,11 +243,11 @@ describe('issue modal', () => {
     await user.type(screen.getByLabelText('Title'), 'Brand new issue');
     await user.click(screen.getByRole('button', { name: 'Create issue' }));
 
-    // The modal transitions to edit mode (KEY-N header) and the card appears live.
-    expect(
-      await screen.findByRole('heading', { name: 'DEMO-1' }),
-    ).toBeDefined();
-    const board = screen.getByRole('main');
-    expect(await within(board).findByText('Brand new issue')).toBeDefined();
+    // The modal transitions to the detail surface: the id becomes a link. The title
+    // then shows twice - as the modal heading and as the new board card behind it.
+    expect(await screen.findByRole('link', { name: 'DEMO-1' })).toBeDefined();
+    await waitFor(() =>
+      expect(screen.getAllByText('Brand new issue')).toHaveLength(2),
+    );
   });
 });

@@ -102,13 +102,11 @@ describe('project issues list', () => {
       await screen.findByRole('button', { name: /Open DEMO-1 Wire the list/ }),
     );
 
-    // The board's modal: KEY heading + editable Title field on the same issue.
+    // The shared detail surface: the id as a link + the title as its heading.
+    expect(await screen.findByRole('link', { name: 'DEMO-1' })).toBeDefined();
     expect(
-      await screen.findByRole('heading', { name: 'DEMO-1' }),
+      screen.getByRole('heading', { name: 'Wire the list' }),
     ).toBeDefined();
-    expect(screen.getByLabelText<HTMLInputElement>('Title').value).toBe(
-      'Wire the list',
-    );
   });
 
   test('an issue created via the API appears live with no reload', async () => {

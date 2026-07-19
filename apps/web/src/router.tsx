@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 import type { ApiClient } from './api';
 import { filterFields } from './filters';
+import { IssueDetailPage } from './routes/issue-detail-page';
 import { ProjectBoard } from './routes/project-board';
 import { ProjectIssues } from './routes/project-issues';
 import { ProjectsList } from './routes/projects-list';
@@ -114,10 +115,45 @@ const projectIssuesRoute = createRoute({
   component: ProjectIssues,
 });
 
+// The standalone ticket page (#40): the same detail surface as the board modal, on
+// its own URL so a ticket link is shareable and opens in a new tab. Seed the single
+// issue plus the project's labels/issues/actors that feed the sidebar pickers and the
+// parent breadcrumb; the per-project SSE stream keeps the issue live once mounted.
+const issueDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$slug/issues/$number',
+  loader: async ({ context, params }) => {
+    const param = { slug: params.slug };
+    const [issueRes, labelsRes, issuesRes, actorsRes] = await Promise.all([
+      context.client.api.projects[':slug'].issues[':number'].$get({
+        param: { slug: params.slug, number: params.number },
+      }),
+      context.client.api.projects[':slug'].labels.$get({ param }),
+      context.client.api.projects[':slug'].issues.$get({ param, query: {} }),
+      context.client.api.actors.$get(),
+    ]);
+    const issue = await issueRes.json();
+    const labels = await labelsRes.json();
+    const issues = await issuesRes.json();
+    const actors = await actorsRes.json();
+    // Narrow away the 404 error shapes (unknown slug/number) so the component gets a
+    // clean issue; a missing issue surfaces as a load error.
+    if (!('number' in issue)) {
+      throw new Error('error' in issue ? issue.error : 'Issue not found');
+    }
+    if (!Array.isArray(labels) || !Array.isArray(issues)) {
+      throw new Error('Project not found');
+    }
+    return { issue, labels, issues, actors };
+  },
+  component: IssueDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   projectRoute,
   projectIssuesRoute,
+  issueDetailRoute,
 ]);
 
 export function createAppRouter(client: ApiClient, fetchImpl: typeof fetch) {

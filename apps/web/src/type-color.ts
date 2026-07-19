@@ -4,11 +4,11 @@
 // keeps a type's color stable as the live set grows. Foreground is black/white by the
 // swatch's WCAG relative luminance so the badge label stays legible (accessibility).
 const PALETTE = [
-  '#e5484d', // red
+  '#f85149', // red
   '#f76b15', // orange
   '#ffca16', // amber
   '#99d52a', // lime
-  '#30a46c', // green
+  '#238636', // green
   '#12a594', // teal
   '#00a2c7', // cyan
   '#0091ff', // blue

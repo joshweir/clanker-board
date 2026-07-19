@@ -29,6 +29,13 @@ body {
   margin-bottom: 1rem;
 }
 
+/* The "← Projects" back link reads as secondary, matching the ticket-id grey
+   (not the default purple link colour). Direct child only, so the Board|Issues
+   tabs and the search box are untouched. */
+.board-header > a {
+  color: color-mix(in srgb, CanvasText 65%, Canvas);
+}
+
 /* Reset the h1's default block margins so the whole header row sits on one centred
    line (the project title, Back link, tabs, and search all vertically aligned). */
 .board-header h1 {
@@ -188,9 +195,9 @@ body {
   max-width: 22rem;
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
-  border: 1px solid #c0392b;
+  border: 1px solid #f85149;
   background: Canvas;
-  color: #c0392b;
+  color: #f85149;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
@@ -258,8 +265,8 @@ button:disabled {
 }
 
 button.danger {
-  border-color: #c0392b;
-  color: #c0392b;
+  border-color: #f85149;
+  color: #f85149;
 }
 
 .modal {
@@ -303,13 +310,32 @@ button.danger {
 }
 
 .error {
-  color: #c0392b;
+  color: #f85149;
 }
 
-/* Issue detail/create modal (#36): wider than the simple project modals, laid out
-   as a header + two columns (main / sidebar). */
+/* Issue detail/create modal (#36): fills the whole viewport; its content sits in a
+   centred reading column (a bit wider than before), matching the standalone page. */
 .issue-modal {
-  width: min(56rem, 100%);
+  box-sizing: border-box;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  overflow: auto;
+  position: relative;
+}
+
+/* Centre the modal content column; the empty sides are the dialog itself, so a
+   click there still closes (see issue-modal.tsx click-away). */
+.issue-modal .issue-detail-toolbar,
+.issue-modal .issue-modal-body,
+.issue-modal > .error,
+.issue-modal .issue-create {
+  width: min(72rem, 100%);
+  margin-inline: auto;
 }
 
 .issue-modal-header {
@@ -346,6 +372,222 @@ button.danger {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
+}
+
+/* Ticket detail (#40): a floating close on the modal, a top toolbar (id link + type
+   + delete) shared by the modal and the standalone page. */
+.issue-modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border: none;
+  background: none;
+  color: inherit;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.issue-modal-close:hover,
+.issue-modal-close:focus-visible {
+  background: color-mix(in srgb, CanvasText 10%, Canvas);
+  outline: none;
+}
+
+.issue-detail-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  /* Leave room for the modal's floating close button. */
+  padding-right: 2rem;
+}
+
+.issue-detail-actions {
+  margin-inline-start: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The ticket id, Jira-style (#40): small, non-bold, monospace; underlines on hover.
+   Hovering the group reveals the Copy link button. */
+.issue-key-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.issue-key {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: color-mix(in srgb, CanvasText 65%, Canvas);
+  text-decoration: none;
+}
+
+.issue-key:hover,
+.issue-key:focus-visible {
+  text-decoration: underline;
+}
+
+/* The button and its copied state share one fixed box so swapping them never shifts
+   the type badge to the right (#40). */
+.copy-link,
+.copy-link-done {
+  box-sizing: border-box;
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.copy-link {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.issue-key-link:hover .copy-link,
+.copy-link:focus-visible {
+  opacity: 1;
+}
+
+.copy-link-done {
+  border-radius: 50%;
+  border: 1.5px solid #238636;
+  color: #238636;
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+/* Inline edit (#40): the value renders as static content that highlights on hover and
+   becomes an editor on click. The hover padding is offset by a negative margin so the
+   view and the surrounding layout do not shift. */
+.inline-edit-view {
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  margin: -0.35rem -0.5rem;
+  cursor: text;
+  transition: background-color 0.15s ease;
+}
+
+.inline-edit-view:hover,
+.inline-edit-view:focus-visible {
+  background: color-mix(in srgb, CanvasText 7%, Canvas);
+  outline: none;
+}
+
+.issue-title-view {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.inline-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.inline-edit-save,
+.inline-edit-cancel {
+  padding: 0.2rem 0.6rem;
+  line-height: 1;
+  transition: background-color 0.15s ease;
+}
+
+.inline-edit-save:hover:not(:disabled),
+.inline-edit-cancel:hover {
+  background: color-mix(in srgb, CanvasText 10%, Canvas);
+}
+
+.issue-description {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.issue-description-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.issue-title-input {
+  font-size: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Standalone ticket page (#40): a constrained reading column under the shared header,
+   with a project/parent/ticket breadcrumb. */
+.issue-page-body {
+  width: min(72rem, 100%);
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* Match the board/issues header inset, and divide the header from the ticket
+   content with a full-width rule (the header spans the viewport; its own padding
+   insets the content). */
+.issue-page > .board-header {
+  margin-bottom: 0;
+  padding: 1rem;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  width: min(72rem, 100%);
+  margin: 0.75rem auto 0;
+  padding: 0 1rem;
+  font-size: 0.85rem;
+}
+
+.breadcrumb-sep {
+  opacity: 0.5;
+}
+
+/* All crumbs read as one row: the ticket-id grey, the project crumb's sans font
+   (not the id monospace), underlining on hover. */
+.breadcrumb a {
+  color: color-mix(in srgb, CanvasText 65%, Canvas);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover,
+.breadcrumb a:focus-visible {
+  text-decoration: underline;
+}
+
+.breadcrumb .issue-key {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.breadcrumb-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.breadcrumb-bolt {
+  color: #ab7df8;
 }
 
 .issue-modal-body {
@@ -397,26 +639,48 @@ button.danger {
   color: #b8860b;
 }
 
+/* Edit|Preview render as tabs sitting on top of the field: the active tab merges
+   into the editor by overlapping its top border (#40). */
 .body-editor-tabs {
   display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.4rem;
+  gap: 0.15rem;
+  margin-bottom: 0;
+}
+
+.body-editor-tabs button {
+  font: inherit;
+  padding: 0.3rem 0.85rem;
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  border-bottom: none;
+  border-radius: 0.4rem 0.4rem 0 0;
+  background: color-mix(in srgb, CanvasText 6%, Canvas);
+  color: inherit;
+  cursor: pointer;
+  /* Overlap the field's top border so the active tab reads as one surface with it. */
+  margin-bottom: -1px;
 }
 
 .body-editor-tabs button[aria-selected='true'] {
-  border-color: color-mix(in srgb, CanvasText 60%, transparent);
+  border-color: color-mix(in srgb, CanvasText 30%, transparent);
+  background: Canvas;
   font-weight: 600;
 }
 
-.body-textarea {
+.body-editor .body-textarea {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
+  font: inherit;
+  padding: 0.5rem;
+  color: CanvasText;
+  background: Canvas;
+  border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+  border-radius: 0 0.4rem 0.4rem 0.4rem;
 }
 
-.body-preview {
-  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
-  border-radius: 0.4rem;
+.body-editor .body-preview {
+  border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+  border-radius: 0 0.4rem 0.4rem 0.4rem;
   padding: 0.5rem 0.75rem;
   min-height: 4rem;
 }
@@ -800,8 +1064,9 @@ button.danger {
 }
 
 .search-icon {
+  display: inline-flex;
+  align-items: center;
   opacity: 0.6;
-  font-size: 0.85rem;
   line-height: 1;
 }
 
@@ -811,7 +1076,7 @@ button.danger {
   background: transparent;
   color: CanvasText;
   padding: 0;
-  width: 12rem;
+  width: 20rem;
 }
 
 .search-field input:focus {
