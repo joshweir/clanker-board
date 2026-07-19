@@ -328,12 +328,14 @@ button.danger {
   position: relative;
 }
 
-/* Centre the modal content column; the empty sides are the dialog itself, so a
-   click there still closes (see issue-modal.tsx click-away). */
+/* Centre the modal content in a single 72rem column. border-box keeps the toolbar's
+   padding-right inside that width, so its left edge lines up with the body below
+   (and thus the id link with the content) rather than being pushed left. */
 .issue-modal .issue-detail-toolbar,
 .issue-modal .issue-modal-body,
 .issue-modal > .error,
 .issue-modal .issue-create {
+  box-sizing: border-box;
   width: min(72rem, 100%);
   margin-inline: auto;
 }
@@ -519,7 +521,7 @@ button.danger {
 }
 
 .issue-description-label {
-  font-size: 0.75rem;
+  font-size: 0.95rem;
   letter-spacing: 0.04em;
   opacity: 0.7;
 }
