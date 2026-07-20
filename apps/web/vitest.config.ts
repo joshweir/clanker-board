@@ -13,6 +13,10 @@ export default mergeConfig(
       environment: 'jsdom',
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       setupFiles: ['./src/test/setup.ts'],
+      // react-shiki ships a bare `import './style.css'`; inline it so Vite's
+      // transform handles the CSS import instead of Node's ESM loader (which
+      // rejects the .css extension when the dep is externalised).
+      server: { deps: { inline: ['react-shiki'] } },
     },
   }),
 );

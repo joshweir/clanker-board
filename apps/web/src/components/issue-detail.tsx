@@ -11,6 +11,7 @@ import {
   type FormEvent,
 } from 'react';
 import type { Actor, ApiClient, Comment, Issue, Label } from '../api';
+import { formatOpened } from '../lib/relative-time';
 import { subscribeToProjectEvents } from '../project-events';
 import { upsertById } from '../upsert';
 import { ensureWebActor } from '../web-actor';
@@ -18,6 +19,11 @@ import { BodyEditor, type BodyMode } from './body-editor';
 import { InlineEdit } from './inline-edit';
 import { IssueKeyLink } from './issue-key-link';
 import { Markdown } from './markdown';
+
+// ponytail: issues do not store a creator yet (#40) - no authorId column, and create
+// never captures the acting actor. Show a placeholder until that is added; then read
+// the creator's name off the issue instead.
+const OPENED_BY = 'Someone';
 
 interface IssueDetailProps {
   client: ApiClient;
@@ -416,37 +422,46 @@ export function IssueDetail({
             }
           />
 
-          <div className="issue-description">
-            <span className="issue-description-label">Description</span>
-            <InlineEdit
-              editing={editingBody}
-              onEnterEdit={startBody}
-              onSave={saveBody}
-              onCancel={cancelBody}
-              editLabel="Edit description"
-              view={
-                current.body.trim().length > 0 ? (
-                  <Markdown source={current.body} />
-                ) : (
-                  <p className="muted">No description. Click to add one.</p>
-                )
-              }
-              editor={
-                <BodyEditor
-                  value={bodyDraft}
-                  mode={bodyMode}
-                  onModeChange={setBodyMode}
-                  onChange={setBodyDraft}
-                  hint={
-                    remote.body ? (
-                      <output className="field-hint">
-                        Changed remotely - your edit will win on save.
-                      </output>
-                    ) : null
-                  }
-                />
-              }
-            />
+          <div className="issue-body-card">
+            <div className="issue-opened">
+              <strong>{OPENED_BY}</strong>
+              <span className="issue-opened-when">
+                {' '}
+                opened {formatOpened(current.createdAt)}
+              </span>
+            </div>
+
+            <div className="issue-description">
+              <InlineEdit
+                editing={editingBody}
+                onEnterEdit={startBody}
+                onSave={saveBody}
+                onCancel={cancelBody}
+                editLabel="Edit description"
+                view={
+                  current.body.trim().length > 0 ? (
+                    <Markdown source={current.body} />
+                  ) : (
+                    <p className="muted">No description. Click to add one.</p>
+                  )
+                }
+                editor={
+                  <BodyEditor
+                    value={bodyDraft}
+                    mode={bodyMode}
+                    onModeChange={setBodyMode}
+                    onChange={setBodyDraft}
+                    hint={
+                      remote.body ? (
+                        <output className="field-hint">
+                          Changed remotely - your edit will win on save.
+                        </output>
+                      ) : null
+                    }
+                  />
+                }
+              />
+            </div>
           </div>
 
           <section className="comments" aria-label="Comments">
@@ -458,11 +473,13 @@ export function IssueDetail({
                     <span className="comment-author">
                       {authorName(comment.actorId)}
                     </span>
-                    <time dateTime={comment.createdAt}>
-                      {new Date(comment.createdAt).toLocaleString()}
+                    <time className="comment-when" dateTime={comment.createdAt}>
+                      commented {formatOpened(comment.createdAt)}
                     </time>
                   </div>
-                  <Markdown source={comment.body} />
+                  <div className="comment-body">
+                    <Markdown source={comment.body} />
+                  </div>
                 </li>
               ))}
             </ul>

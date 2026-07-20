@@ -313,6 +313,13 @@ button.danger {
   color: #f85149;
 }
 
+/* Issue content (modal + standalone page) renders one step smaller than the app
+   default; em/inherited children scale to this base (#36). */
+.issue-modal,
+.issue-page-body {
+  font-size: 0.85rem;
+}
+
 /* Issue detail/create modal (#36): fills the whole viewport; its content sits in a
    centred reading column (a bit wider than before), matching the standalone page. */
 .issue-modal {
@@ -490,9 +497,12 @@ button.danger {
   outline: none;
 }
 
+/* The issue title sits a step above the markdown h1 (2em of the 0.85rem content
+   base = 1.7rem), so it reads as the ticket's primary heading. */
 .issue-title-view {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 2.1rem;
+  font-weight: 500;
 }
 
 .inline-edit-actions {
@@ -514,20 +524,38 @@ button.danger {
   background: color-mix(in srgb, CanvasText 10%, Canvas);
 }
 
+/* Description card (#40): one bordered box holds a provenance header
+   ("<creator> opened <relative time>") joined to the description body below it.
+   overflow clips the children to the rounded corners so no inner radius is needed. */
+.issue-body-card {
+  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* The header reads as a distinct strip: a subtle grey fill (like the inline-code tint)
+   and a divider rule against the body. */
+.issue-opened {
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, CanvasText 8%, Canvas);
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+/* The date/"opened" clause is secondary to the creator name, so it reads greyer. */
+.issue-opened-when {
+  color: color-mix(in srgb, CanvasText 55%, Canvas);
+}
+
 .issue-description {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-}
-
-.issue-description-label {
-  font-size: 0.95rem;
-  letter-spacing: 0.04em;
-  opacity: 0.7;
+  padding: 0.75rem;
 }
 
 .issue-title-input {
-  font-size: 1.25rem;
+  font-size: 2.1rem;
+  font-weight: 500;
   width: 100%;
   box-sizing: border-box;
 }
@@ -686,6 +714,10 @@ button.danger {
   min-height: 4rem;
 }
 
+.markdown {
+  line-height: 1.45;
+}
+
 .markdown > :first-child {
   margin-top: 0;
 }
@@ -694,9 +726,113 @@ button.danger {
   margin-bottom: 0;
 }
 
-.md-heading {
+.markdown :is(h1, h2, h3, h4, h5, h6) {
   font-weight: 700;
-  margin: 0.5rem 0;
+  margin: 1rem 0 0.5rem;
+  line-height: 1.25;
+}
+.markdown h1 {
+  font-size: 2em;
+}
+.markdown h2 {
+  font-size: 1.6em;
+}
+.markdown h3 {
+  font-size: 1.35em;
+}
+.markdown h4 {
+  font-size: 1.15em;
+}
+.markdown h5 {
+  font-size: 1.05em;
+}
+/* h1/h2 carry a faint rule beneath them, reading as a section divider (GitHub parity). */
+.markdown :is(h1, h2) {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+/* Tables: zebra rows + cell borders (GitHub parity). display:block + overflow so
+   wide tables scroll instead of blowing out the column width. */
+.markdown table {
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  padding: 0.3rem 0.65rem;
+}
+.markdown thead th {
+  font-weight: 700;
+}
+.markdown tbody tr:nth-child(even) {
+  background: color-mix(in srgb, CanvasText 4%, Canvas);
+}
+
+/* Inline code: same surface as the fenced blocks. ponytail: the block background is
+   Shiki's github light/dark theme bg, hardcoded here to match; if the code theme
+   changes, update these two values (or expose them as CSS vars). */
+.md-inline-code {
+  background: light-dark(#fff, #24292e);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Fenced code block: relative box so the copy button pins top-right. Shiki paints
+   its own theme background/padding on the inner <pre>. */
+.md-code-block {
+  position: relative;
+  margin: 0.75rem 0;
+}
+.md-code-block pre {
+  margin: 0;
+  border-radius: 0.4rem;
+  font-size: 0.9em;
+  /* Override react-shiki's default block padding (1.25rem/1.5rem) with a tighter box. */
+  padding: 0.6rem 0.8rem;
+}
+.md-copy-btn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 1;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 0.3rem;
+  border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+  background: color-mix(in srgb, Canvas 80%, CanvasText);
+  color: CanvasText;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.md-code-block:hover .md-copy-btn,
+.md-copy-btn:focus-visible {
+  opacity: 1;
+}
+
+/* Blockquotes + GFM task lists. */
+.markdown blockquote {
+  margin: 0.75rem 0;
+  padding: 0 0 0 1rem;
+  border-left: 3px solid color-mix(in srgb, CanvasText 25%, transparent);
+  color: color-mix(in srgb, CanvasText 70%, Canvas);
+}
+.markdown :is(ul, ol) {
+  padding-left: 1.6rem;
+}
+.markdown ul.contains-task-list {
+  list-style: none;
+  padding-left: 1rem;
+}
+.markdown .task-list-item input {
+  margin-right: 0.4rem;
 }
 
 .muted {
@@ -750,23 +886,33 @@ button.danger {
   gap: 0.75rem;
 }
 
+/* Comments share the description card's shape (#40): a grey header strip (author +
+   relative time) joined to a padded body. */
 .comment {
-  border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
-  border-radius: 0.4rem;
-  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  border-radius: 0.5rem;
+  overflow: hidden;
 }
 
 .comment-meta {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: baseline;
-  font-size: 0.75rem;
-  opacity: 0.7;
-  margin-bottom: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, CanvasText 8%, Canvas);
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
 }
 
 .comment-author {
   font-weight: 600;
+}
+
+.comment-when {
+  color: color-mix(in srgb, CanvasText 55%, Canvas);
+}
+
+.comment-body {
+  padding: 0.75rem;
 }
 
 .comment-composer {
