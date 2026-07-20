@@ -14,6 +14,8 @@ export function BodyEditor({
   onFocus,
   onBlur,
   hint,
+  ariaLabel = 'Body',
+  placeholder,
 }: {
   value: string;
   mode: BodyMode;
@@ -22,13 +24,15 @@ export function BodyEditor({
   onFocus?: () => void;
   onBlur?: () => void;
   hint?: ReactNode;
+  ariaLabel?: string;
+  placeholder?: string;
 }) {
   return (
     <div className="body-editor">
       <div
         className="body-editor-tabs"
         role="tablist"
-        aria-label="Body editor mode"
+        aria-label={`${ariaLabel} editor mode`}
       >
         <button
           type="button"
@@ -50,7 +54,8 @@ export function BodyEditor({
       {mode === 'edit' ? (
         <textarea
           className="body-textarea"
-          aria-label="Body"
+          aria-label={ariaLabel}
+          placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={onFocus}

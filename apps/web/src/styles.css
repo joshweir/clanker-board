@@ -672,7 +672,6 @@ button.danger {
    into the editor by overlapping its top border (#40). */
 .body-editor-tabs {
   display: flex;
-  gap: 0.15rem;
   margin-bottom: 0;
 }
 
@@ -681,12 +680,21 @@ button.danger {
   padding: 0.3rem 0.85rem;
   border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
   border-bottom: none;
-  border-radius: 0.4rem 0.4rem 0 0;
   background: color-mix(in srgb, CanvasText 6%, Canvas);
   color: inherit;
   cursor: pointer;
   /* Overlap the field's top border so the active tab reads as one surface with it. */
   margin-bottom: -1px;
+}
+
+/* Joined tabs: outer corners rounded, shared middle border (no gap). */
+.body-editor-tabs button:first-child {
+  border-radius: 0.4rem 0 0 0;
+}
+
+.body-editor-tabs button:last-child {
+  border-radius: 0 0.4rem 0 0;
+  border-left: none;
 }
 
 .body-editor-tabs button[aria-selected='true'] {
@@ -920,6 +928,10 @@ button.danger {
   flex-direction: column;
   gap: 0.5rem;
   align-items: flex-end;
+}
+
+.comment-composer .body-editor {
+  width: 100%;
 }
 
 .comment-composer textarea {

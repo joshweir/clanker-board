@@ -76,6 +76,7 @@ export function IssueDetail({
   const [comments, setComments] = useState<Comment[]>([]);
   const [actors, setActors] = useState<Actor[]>([]);
   const [commentDraft, setCommentDraft] = useState('');
+  const [commentMode, setCommentMode] = useState<BodyMode>('edit');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -273,6 +274,7 @@ export function IssueDetail({
           throw new Error('comment failed');
         }
         setCommentDraft('');
+        setCommentMode('edit');
         // Keep author names resolvable (the Web actor may be newly created).
         await loadActors();
       } catch {
@@ -474,7 +476,7 @@ export function IssueDetail({
                       {authorName(comment.actorId)}
                     </span>
                     <time className="comment-when" dateTime={comment.createdAt}>
-                      commented {formatOpened(comment.createdAt)}
+                      {formatOpened(comment.createdAt)}
                     </time>
                   </div>
                   <div className="comment-body">
@@ -484,12 +486,13 @@ export function IssueDetail({
               ))}
             </ul>
             <form className="comment-composer" onSubmit={submitComment}>
-              <textarea
-                aria-label="Add a comment"
-                placeholder="Add a comment"
+              <BodyEditor
                 value={commentDraft}
-                onChange={(e) => setCommentDraft(e.target.value)}
-                rows={3}
+                mode={commentMode}
+                onModeChange={setCommentMode}
+                onChange={setCommentDraft}
+                ariaLabel="Add a comment"
+                placeholder="Add a comment"
               />
               <button type="submit" disabled={commentDraft.trim().length === 0}>
                 Comment

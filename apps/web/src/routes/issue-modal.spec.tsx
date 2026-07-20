@@ -175,7 +175,11 @@ describe('issue modal', () => {
 
     await user.click(screen.getByLabelText('Edit description'));
     await user.type(screen.getByLabelText('Body'), '**bold**');
-    await user.click(screen.getByRole('tab', { name: 'Preview' }));
+    await user.click(
+      within(
+        screen.getByRole('tablist', { name: 'Body editor mode' }),
+      ).getByRole('tab', { name: 'Preview' }),
+    );
 
     expect(screen.getByText('bold').tagName).toBe('STRONG');
   });
