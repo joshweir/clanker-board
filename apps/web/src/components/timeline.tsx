@@ -3,6 +3,7 @@ import type { Actor, Comment, IssueEvent } from '../api';
 import { formatOpened } from '../lib/relative-time';
 import { ActorName } from './actor-name';
 import { Markdown } from './markdown';
+import type { MentionableIssue } from './remark-mentions';
 
 // GitHub-style activity rail (#77/#83): events and comments merged into one
 // date-ordered stream. Variant A "Classic rail" - locked, reproduced exactly from
@@ -69,6 +70,7 @@ export function Timeline({
   comments,
   actors,
   freshKeys,
+  mentions,
   composer,
 }: {
   events: IssueEvent[];
@@ -78,6 +80,12 @@ export function Timeline({
   // spot without a refresh (#83 "Live: new events + comments appear without
   // refresh"); keyed the same as each node (`event-<id>` / `comment-<id>`).
   freshKeys: Set<string>;
+  // Mention-link resolver input (#88), forwarded to each comment's `Markdown` body -
+  // same shape IssueDetail already passes the description.
+  mentions?: {
+    projectKey: string;
+    issues: readonly MentionableIssue[];
+  };
   // The comment composer is owned by IssueDetail (real autosave/submit wiring) -
   // this component only places it at the bottom of the stream.
   composer: ReactNode;
@@ -107,7 +115,7 @@ export function Timeline({
                     </time>
                   </div>
                   <div className="comment-body">
-                    <Markdown source={comment.body} />
+                    <Markdown source={comment.body} mentions={mentions} />
                   </div>
                 </div>
               </li>

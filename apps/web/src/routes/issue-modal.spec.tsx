@@ -272,6 +272,32 @@ describe('issue modal', () => {
     await modal.findByText('Ready');
   });
 
+  test('a mention in the description links to the target issue, in a new tab (#88)', async () => {
+    let first = 0;
+    const { router, user } = await renderApp(async (client) => {
+      await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } });
+      first = await createIssue(client, 'Wire the board');
+      const second = await createIssue(client, 'Ship the API');
+      await client.api.projects[':slug'].issues[':number'].$patch({
+        param: { slug, number: String(first) },
+        json: { body: `See #DEMO-${second} and a look-alike SOC-2.` },
+      });
+    });
+    await router.navigate({ to: '/projects/$slug', params: { slug } });
+    await user.click(await screen.findByText('Wire the board'));
+    await screen.findByLabelText('Edit title');
+
+    // The hover card is `aria-hidden` (#88 review N2), so the link's
+    // accessible name is just its visible typed text, not the card's too.
+    const mention = await screen.findByRole('link', { name: '#DEMO-2' });
+    expect(mention.getAttribute('href')).toBe('/projects/demo/issues/2');
+    expect(mention.getAttribute('target')).toBe('_blank');
+    expect(mention.getAttribute('rel')).toBe('noopener');
+    // The look-alike stays plain prose - never a link.
+    expect(screen.queryByRole('link', { name: /SOC-2/ })).toBeNull();
+    expect(screen.getByText(/look-alike SOC-2/)).toBeDefined();
+  });
+
   test('the header New issue button creates via the same modal', async () => {
     const { router, user } = await renderApp(async (client) => {
       await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } });

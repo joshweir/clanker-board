@@ -485,7 +485,10 @@ export function IssueDetail({
                 editLabel="Edit description"
                 view={
                   current.body.trim().length > 0 ? (
-                    <Markdown source={current.body} />
+                    <Markdown
+                      source={current.body}
+                      mentions={{ projectKey: slug.toUpperCase(), issues }}
+                    />
                   ) : (
                     <p className="muted">No description. Click to add one.</p>
                   )
@@ -514,6 +517,7 @@ export function IssueDetail({
             comments={comments}
             actors={actors}
             freshKeys={freshKeys}
+            mentions={{ projectKey: slug.toUpperCase(), issues }}
             composer={
               <form className="comment-composer" onSubmit={submitComment}>
                 <BodyEditor
