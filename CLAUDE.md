@@ -8,6 +8,10 @@
 pnpm install
 ```
 
+### Worktree initialization
+
+Always run `pnpm install` in a fresh git worktree
+
 ### Build (typecheck)
 
 ```bash
