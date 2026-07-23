@@ -12,11 +12,13 @@ import type { MentionableIssue } from './remark-mentions';
 // icons sit on it, comments are full-width cards the spine runs behind, the
 // composer sits at the very bottom.
 //
-// This ticket (#83) only ever renders the two streams that exist today - comments,
-// and the `opened` event (which is itself dropped from the rail below, exactly as
-// the prototype does, because the description card above already reads "<author>
-// opened <when>"). The other 17 event shapes (#84-#87) each add their own phrasing/
-// icon by extending `eventLine` - the merge, ordering and rail layout do not change.
+// #83 laid down the rail rendering comments and the `opened` event (itself
+// dropped from the rail below, because the description card above already
+// reads "<author> opened <when>"). #84 adds real phrasing/icons for the
+// lifecycle (`closed`/`reopened`), field (`renamed`/`typed`) and involvement
+// (`assigned`/`unassigned`) shapes; #85 adds the label chip wording (`labeled`/
+// `unlabeled`); relationships (#86) and mentions (#87) still fall through
+// `eventLine`'s placeholder - the merge, ordering and rail layout never change.
 
 type TimelineNode =
   | { kind: 'event'; key: string; event: IssueEvent }
@@ -68,14 +70,54 @@ function labelChip({ labelId, name }: { labelId: number; name: string }) {
 
 // The self-contained one-liner phrasing for an event type, GitHub-style ("<actor>
 // <predicate> <time>"). `opened` never actually reaches here (filtered below,
-// kept for completeness); every other shape is a placeholder until its owning
-// ticket (#84 lifecycle/field/involvement, #86 relationships, #87 mentions)
-// gives it real wording (and, where the design calls for it, replaces the plain
-// rail dot with its own icon or adds counterpart links underneath).
-function eventLine(event: IssueEvent): ReactNode {
+// kept for completeness). Lifecycle/field/involvement (#84) and labels (#85)
+// render real wording here; relationships (#86) and mentions (#87) are still a
+// bare placeholder until their own ticket lands.
+function eventLine(event: IssueEvent, actors: Actor[]): ReactNode {
   switch (event.type) {
     case 'opened':
       return 'opened this';
+    case 'closed':
+      return 'closed this';
+    case 'reopened':
+      return 'reopened this';
+    case 'renamed':
+      return (
+        <>
+          renamed this from "{event.data.from}" to "{event.data.to}"
+        </>
+      );
+    case 'typed':
+      return (
+        <>
+          changed the type from{' '}
+          <span className="issue-type-badge issue-type-badge-old">
+            {event.data.from}
+          </span>{' '}
+          to <span className="issue-type-badge">{event.data.to}</span>
+        </>
+      );
+    case 'assigned':
+      // Self-vs-other is derived here, never stored (#84): the acting actor
+      // claiming/assigning themselves reads "self-assigned"; anyone assigning
+      // someone else names the assignee via the shared actor-display helper.
+      return event.actorId === event.data.assigneeActorId ? (
+        'self-assigned this'
+      ) : (
+        <>
+          assigned{' '}
+          <ActorName actorId={event.data.assigneeActorId} actors={actors} />
+        </>
+      );
+    case 'unassigned':
+      return event.actorId === event.data.assigneeActorId ? (
+        'removed their assignment'
+      ) : (
+        <>
+          unassigned{' '}
+          <ActorName actorId={event.data.assigneeActorId} actors={actors} />
+        </>
+      );
     case 'labeled':
       return <>added {labelChip(event.data)}</>;
     case 'unlabeled':
@@ -83,6 +125,26 @@ function eventLine(event: IssueEvent): ReactNode {
     default:
       return event.type;
   }
+}
+
+// The rail marker for a lifecycle event (#84): `closed`/`reopened` swap the
+// plain neutral dot for their own status glyph (same ~1.5rem band, no ring) so
+// the rail itself shows the state transition, not just its wording. Every other
+// event type keeps the plain dot.
+function statusDot(event: IssueEvent): ReactNode {
+  if (event.type === 'closed') {
+    return (
+      <span className="timeline-dot timeline-dot-closed" aria-hidden="true">
+        ✓
+      </span>
+    );
+  }
+  if (event.type === 'reopened') {
+    return (
+      <span className="timeline-dot timeline-dot-open" aria-hidden="true" />
+    );
+  }
+  return <span className="timeline-dot" aria-hidden="true" />;
 }
 
 export function Timeline({
@@ -148,10 +210,10 @@ export function Timeline({
               key={node.key}
               className={`timeline-node timeline-node-event${fresh}`}
             >
-              <span className="timeline-dot" aria-hidden="true" />
+              {statusDot(event)}
               <p className="timeline-line">
                 <ActorName actorId={event.actorId} actors={actors} />{' '}
-                {eventLine(event)}{' '}
+                {eventLine(event, actors)}{' '}
                 <time dateTime={event.createdAt}>
                   {formatOpened(event.createdAt)}
                 </time>
