@@ -82,6 +82,12 @@ export const issues = sqliteTable(
         onDelete: 'set null',
       },
     ),
+    // Every issue has a truthful author (#73): the context actor (X-Actor-Id) that
+    // created it. NOT NULL, plain reference with no onDelete - a verbatim mirror of
+    // comments.actorId (actors are never deleted, so no policy is needed).
+    authorId: integer('author_id')
+      .notNull()
+      .references(() => actors.id),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),

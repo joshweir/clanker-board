@@ -6,8 +6,38 @@ import type { AppType } from '@clanker/api';
 // in-process api app, so the browser client and Seam-2 tests share one path.
 export type ApiClient = ReturnType<typeof hc<AppType>>;
 
+// Every mutation is attributed to an ambient caller-asserted actor (#18, #81).
+// The SPA has no auth, so it speaks as the instance's Human actor (the same
+// "first kind=human actor" convention as ensureHumanActor/server boot) - looked
+// up once (via the unwrapped fetch, to avoid recursing back through itself)
+// and cached, then attached as a default X-Actor-Id header on every request.
+// Call sites never mention the actor again.
 export function createClient(fetchImpl?: typeof fetch): ApiClient {
-  return hc<AppType>('/', fetchImpl ? { fetch: fetchImpl } : {});
+  const baseFetch = fetchImpl ?? fetch;
+  let actorId: Promise<number> | undefined;
+  const resolveActorId = async () => {
+    actorId ??= (async () => {
+      const rows: { id: number; kind: string }[] = await (
+        await baseFetch('/api/actors')
+      ).json();
+      const human = rows.find((row) => row.kind === 'human');
+      if (!human) {
+        throw new Error('no human actor exists on this instance');
+      }
+      return human.id;
+    })();
+    return actorId;
+  };
+  const withActor: typeof fetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    // Respect a caller-supplied header (e.g. a test attributing one call to a
+    // different actor) rather than clobbering it with the instance default.
+    if (!headers.has('X-Actor-Id')) {
+      headers.set('X-Actor-Id', String(await resolveActorId()));
+    }
+    return baseFetch(input, { ...init, headers });
+  };
+  return hc<AppType>('/', { fetch: withActor });
 }
 
 export type Project = InferResponseType<

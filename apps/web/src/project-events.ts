@@ -34,6 +34,7 @@ const issueSnapshot = z.object({
   assigneeId: z.number().nullable(),
   claimedAt: z.string().nullable(),
   parentId: z.number().nullable(),
+  authorId: z.number(),
   key: z.string(),
   labels: z.array(labelSnapshot),
   blockers: z.array(blockerSnapshot),

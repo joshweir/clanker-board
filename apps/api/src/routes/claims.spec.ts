@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { createApp } from '../app';
-import { createDb } from '../db/client';
+import { testApp } from '../test/app';
 import { nextEventOfType, readEvents } from '../test/sse';
 import { ActorSchema } from './actors';
 import { IssueSchema } from './issues';
@@ -8,10 +7,10 @@ import { ErrorSchema } from './projects';
 
 // Seam 1: drive the real Hono app through app.request against a real in-memory
 // SQLite with migrations applied. No mocking of Drizzle, SQLite, or the bus.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof testApp>['app'];
 
 beforeEach(() => {
-  app = createApp(createDb(':memory:'));
+  ({ app } = testApp());
 });
 
 afterEach(() => {
@@ -48,16 +47,22 @@ const patchIssue = async (number: number, body: unknown) =>
     ...json(body),
   });
 
+// The claimant is the acting (header) actor, never a body field (#81) - a
+// claim is always self-referential.
 const claim = async (number: number, actorId: number) =>
   app.request(`/api/projects/demo/issues/${number}/claim`, {
     method: 'POST',
-    ...json({ actorId }),
+    headers: { 'X-Actor-Id': String(actorId) },
   });
 
-const claimNext = async (body: unknown) =>
+const claimNext = async (actorId: number, filters: unknown = {}) =>
   app.request('/api/projects/demo/issues/claim-next', {
     method: 'POST',
-    ...json(body),
+    headers: {
+      'content-type': 'application/json',
+      'X-Actor-Id': String(actorId),
+    },
+    body: JSON.stringify(filters),
   });
 
 const parseIssue = async (res: Response) => IssueSchema.parse(await res.json());
@@ -122,15 +127,15 @@ describe('POST /api/projects/:slug/issues/:number/claim', () => {
     expect((await claim(1, agent.id)).status).toBe(409);
   });
 
-  test('400s for an unknown actor, 404s for unknown issue/project', async () => {
+  test('404s for an unknown actor, 404s for unknown issue/project', async () => {
     const agent = await createActor('claude:a');
-    expect((await claim(1, 999)).status).toBe(400);
+    expect((await claim(1, 999)).status).toBe(404);
     expect((await claim(99, agent.id)).status).toBe(404);
     expect(
       (
         await app.request('/api/projects/nope/issues/1/claim', {
           method: 'POST',
-          ...json({ actorId: agent.id }),
+          headers: { 'X-Actor-Id': String(agent.id) },
         })
       ).status,
     ).toBe(404);
@@ -163,9 +168,9 @@ describe('POST /api/projects/:slug/issues/claim-next', () => {
       await createActor('claude:a'),
       await createActor('claude:b'),
     ];
-    const first = await parseIssue(await claimNext({ actorId: a.id }));
+    const first = await parseIssue(await claimNext(a.id));
     expect(first.number).toBe(1);
-    const second = await parseIssue(await claimNext({ actorId: b.id }));
+    const second = await parseIssue(await claimNext(b.id));
     expect(second.number).toBe(2);
   });
 
@@ -177,29 +182,29 @@ describe('POST /api/projects/:slug/issues/claim-next', () => {
     });
     const agent = await createActor('claude:a');
     // #1 blocks #2, so both claims land on... #1 first; then nothing is ready.
-    expect(
-      (await parseIssue(await claimNext({ actorId: agent.id }))).number,
-    ).toBe(1);
+    expect((await parseIssue(await claimNext(agent.id))).number).toBe(1);
     await patchIssue(1, { state: 'closed' });
     // Closing the blocker frees #2 - but #1 is closed, so claim-next skips it.
-    expect(
-      (await parseIssue(await claimNext({ actorId: agent.id }))).number,
-    ).toBe(2);
+    expect((await parseIssue(await claimNext(agent.id))).number).toBe(2);
   });
 
   test('404s when nothing matches', async () => {
     const agent = await createActor('claude:a');
-    expect((await claimNext({ actorId: agent.id })).status).toBe(404);
+    expect((await claimNext(agent.id)).status).toBe(404);
   });
 
-  test('400s for an unknown actor, 404s for an unknown project', async () => {
+  test('404s for an unknown actor, 404s for an unknown project', async () => {
     const agent = await createActor('claude:a');
-    expect((await claimNext({ actorId: 999 })).status).toBe(400);
+    expect((await claimNext(999)).status).toBe(404);
     expect(
       (
         await app.request('/api/projects/nope/issues/claim-next', {
           method: 'POST',
-          ...json({ actorId: agent.id }),
+          headers: {
+            'content-type': 'application/json',
+            'X-Actor-Id': String(agent.id),
+          },
+          body: JSON.stringify({}),
         })
       ).status,
     ).toBe(404);
@@ -218,24 +223,20 @@ describe('POST /api/projects/:slug/issues/claim-next', () => {
     });
     const agent = await createActor('claude:a');
     const byLabel = await parseIssue(
-      await claimNext({ actorId: agent.id, label: 'Ready-For-Agent' }),
+      await claimNext(agent.id, { label: 'Ready-For-Agent' }),
     );
     expect(byLabel.number).toBe(2);
     await patchIssue(2, { assigneeId: null });
     const byType = await parseIssue(
-      await claimNext({ actorId: agent.id, type: 'chore' }),
+      await claimNext(agent.id, { type: 'chore' }),
     );
     expect(byType.number).toBe(1);
   });
 
   test('rejects an unknown label or parent with 400', async () => {
     const agent = await createActor('claude:a');
-    expect((await claimNext({ actorId: agent.id, label: 'nope' })).status).toBe(
-      400,
-    );
-    expect(
-      (await claimNext({ actorId: agent.id, parentNumber: 99 })).status,
-    ).toBe(400);
+    expect((await claimNext(agent.id, { label: 'nope' })).status).toBe(400);
+    expect((await claimNext(agent.id, { parentNumber: 99 })).status).toBe(400);
   });
 
   test('filters by parentNumber (children of a spec)', async () => {
@@ -248,7 +249,7 @@ describe('POST /api/projects/:slug/issues/claim-next', () => {
     });
     const agent = await createActor('claude:a');
     const claimed = await parseIssue(
-      await claimNext({ actorId: agent.id, parentNumber: 1 }),
+      await claimNext(agent.id, { parentNumber: 1 }),
     );
     expect(claimed.number).toBe(2);
   });
@@ -260,9 +261,9 @@ describe('POST /api/projects/:slug/issues/claim-next', () => {
       await createActor('claude:b'),
     ];
     await claim(1, a.id);
-    expect((await claimNext({ actorId: b.id })).status).toBe(404);
+    expect((await claimNext(b.id)).status).toBe(404);
     vi.stubEnv('CLAIM_TTL_MINUTES', '-1');
-    const stolen = await parseIssue(await claimNext({ actorId: b.id }));
+    const stolen = await parseIssue(await claimNext(b.id));
     expect(stolen.assigneeId).toBe(b.id);
   });
 });

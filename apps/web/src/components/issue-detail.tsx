@@ -14,16 +14,11 @@ import type { Actor, ApiClient, Comment, Issue, Label } from '../api';
 import { formatOpened } from '../lib/relative-time';
 import { subscribeToProjectEvents } from '../project-events';
 import { upsertById } from '../upsert';
-import { ensureWebActor } from '../web-actor';
+import { ActorName } from './actor-name';
 import { BodyEditor, type BodyMode } from './body-editor';
 import { InlineEdit } from './inline-edit';
 import { IssueKeyLink } from './issue-key-link';
 import { Markdown } from './markdown';
-
-// ponytail: issues do not store a creator yet (#40) - no authorId column, and create
-// never captures the acting actor. Show a placeholder until that is added; then read
-// the creator's name off the issue instead.
-const OPENED_BY = 'Someone';
 
 interface IssueDetailProps {
   client: ApiClient;
@@ -263,20 +258,19 @@ export function IssueDetail({
     }
     void (async () => {
       try {
-        const actorId = await ensureWebActor(client);
+        // Attribution travels as the default X-Actor-Id header (api.ts) - never
+        // in the body.
         const res = await client.api.projects[':slug'].issues[
           ':number'
         ].comments.$post({
           param: { slug, number: String(currentRef.current.number) },
-          json: { actorId, body: text },
+          json: { body: text },
         });
         if (!res.ok) {
           throw new Error('comment failed');
         }
         setCommentDraft('');
         setCommentMode('edit');
-        // Keep author names resolvable (the Web actor may be newly created).
-        await loadActors();
       } catch {
         setError('Could not add your comment.');
       }
@@ -351,9 +345,6 @@ export function IssueDetail({
   );
   const parent = issues.find((i) => i.id === current.parentId);
 
-  const authorName = (actorId: number) =>
-    actors.find((a) => a.id === actorId)?.name ?? 'Unknown';
-
   return (
     <>
       <div className="issue-detail-toolbar">
@@ -426,7 +417,9 @@ export function IssueDetail({
 
           <div className="issue-body-card">
             <div className="issue-opened">
-              <strong>{OPENED_BY}</strong>
+              <strong>
+                <ActorName actorId={current.authorId} actors={actors} />
+              </strong>
               <span className="issue-opened-when">
                 {' '}
                 opened {formatOpened(current.createdAt)}
@@ -473,7 +466,7 @@ export function IssueDetail({
                 <li key={comment.id} className="comment">
                   <div className="comment-meta">
                     <span className="comment-author">
-                      {authorName(comment.actorId)}
+                      <ActorName actorId={comment.actorId} actors={actors} />
                     </span>
                     <time className="comment-when" dateTime={comment.createdAt}>
                       {formatOpened(comment.createdAt)}
