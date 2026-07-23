@@ -10,7 +10,14 @@ import {
   useState,
   type FormEvent,
 } from 'react';
-import type { Actor, ApiClient, Comment, Issue, Label } from '../api';
+import type {
+  Actor,
+  ApiClient,
+  Comment,
+  Issue,
+  IssueEvent,
+  Label,
+} from '../api';
 import { formatOpened } from '../lib/relative-time';
 import { subscribeToProjectEvents } from '../project-events';
 import { upsertById } from '../upsert';
@@ -19,6 +26,11 @@ import { BodyEditor, type BodyMode } from './body-editor';
 import { InlineEdit } from './inline-edit';
 import { IssueKeyLink } from './issue-key-link';
 import { Markdown } from './markdown';
+import { Timeline } from './timeline';
+
+// How long a live-inserted timeline row stays flagged "fresh" (matches the
+// `.timeline-fresh` flash animation's duration in styles.css).
+const FRESH_MS = 2200;
 
 interface IssueDetailProps {
   client: ApiClient;
@@ -69,11 +81,27 @@ export function IssueDetail({
     type?: boolean;
   }>({});
   const [comments, setComments] = useState<Comment[]>([]);
+  const [events, setEvents] = useState<IssueEvent[]>([]);
+  // Live-inserted row keys (`event-<id>` / `comment-<id>`), flagged briefly for the
+  // timeline's flash-in treatment (#83) then cleared - see FRESH_MS.
+  const [freshKeys, setFreshKeys] = useState<Set<string>>(new Set());
   const [actors, setActors] = useState<Actor[]>([]);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentMode, setCommentMode] = useState<BodyMode>('edit');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Flag a just-arrived live row as fresh, then let it fade on its own.
+  const flash = useCallback((key: string) => {
+    setFreshKeys((prev) => new Set(prev).add(key));
+    setTimeout(() => {
+      setFreshKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }, FRESH_MS);
+  }, []);
 
   // Refs mirror the latest values so the once-subscribed SSE handler reads current
   // state without re-subscribing on every keystroke.
@@ -117,6 +145,21 @@ export function IssueDetail({
     })();
   }, [client, slug, number]);
 
+  // (Re)load this issue's timeline events (#82/#83) alongside its comments - the
+  // two streams the timeline merges by (createdAt, id).
+  useEffect(() => {
+    void (async () => {
+      const res = await client.api.projects[':slug'].issues[
+        ':number'
+      ].events.$get({
+        param: { slug, number: String(number) },
+      });
+      if (res.ok) {
+        setEvents(await res.json());
+      }
+    })();
+  }, [client, slug, number]);
+
   // Subscribe once to the project stream. issue.changed upserts `current` live; a
   // field being edited is not clobbered - instead it flags "changed remotely" so the
   // user's pending edit still wins on save. comment.created appends; issue.deleted
@@ -152,10 +195,17 @@ export function IssueDetail({
         onCommentCreated: (comment) => {
           if (comment.issueId === currentRef.current.id) {
             setComments((prev) => upsertById(prev, comment));
+            flash(`comment-${comment.id}`);
+          }
+        },
+        onEventCreated: (event) => {
+          if (event.issueId === currentRef.current.id) {
+            setEvents((prev) => upsertById(prev, event));
+            flash(`event-${event.id}`);
           }
         },
       }),
-    [fetchImpl, slug],
+    [fetchImpl, slug, flash],
   );
 
   // One PATCH per field (#36): absent fields stay unchanged. The returned snapshot
@@ -462,42 +512,31 @@ export function IssueDetail({
             </div>
           </div>
 
-          <section className="comments" aria-label="Comments">
-            <h3>Comments</h3>
-            <ul className="comment-list">
-              {comments.map((comment) => (
-                <li key={comment.id} className="comment">
-                  <div className="comment-meta">
-                    <span className="comment-author">
-                      <ActorName actorId={comment.actorId} actors={actors} />
-                    </span>
-                    <time className="comment-when" dateTime={comment.createdAt}>
-                      {formatOpened(comment.createdAt)}
-                    </time>
-                  </div>
-                  <div className="comment-body">
-                    <Markdown
-                      source={comment.body}
-                      mentions={{ projectKey: slug.toUpperCase(), issues }}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <form className="comment-composer" onSubmit={submitComment}>
-              <BodyEditor
-                value={commentDraft}
-                mode={commentMode}
-                onModeChange={setCommentMode}
-                onChange={setCommentDraft}
-                ariaLabel="Add a comment"
-                placeholder="Add a comment"
-              />
-              <button type="submit" disabled={commentDraft.trim().length === 0}>
-                Comment
-              </button>
-            </form>
-          </section>
+          <Timeline
+            events={events}
+            comments={comments}
+            actors={actors}
+            freshKeys={freshKeys}
+            mentions={{ projectKey: slug.toUpperCase(), issues }}
+            composer={
+              <form className="comment-composer" onSubmit={submitComment}>
+                <BodyEditor
+                  value={commentDraft}
+                  mode={commentMode}
+                  onModeChange={setCommentMode}
+                  onChange={setCommentDraft}
+                  ariaLabel="Add a comment"
+                  placeholder="Add a comment"
+                />
+                <button
+                  type="submit"
+                  disabled={commentDraft.trim().length === 0}
+                >
+                  Comment
+                </button>
+              </form>
+            }
+          />
         </div>
 
         <aside className="issue-sidebar">
