@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  index,
   integer,
   primaryKey,
   sqliteTable,
@@ -7,6 +8,7 @@ import {
   uniqueIndex,
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
+import { EVENT_TYPES } from '../domain/events';
 
 // Drizzle tables are the single source of truth (#14): drizzle-zod derives the
 // base Zod schemas, routes refine them. slug = key.toLowerCase() is derived,
@@ -191,17 +193,54 @@ export const issueBlockedBy = sqliteTable(
 // whole project) cascade-deletes its comments. actor_id is required and validated
 // at the API boundary; actors are never deleted (no delete route), so a plain
 // reference suffices with no onDelete policy.
-export const comments = sqliteTable('comments', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  issueId: integer('issue_id')
-    .notNull()
-    .references(() => issues.id, { onDelete: 'cascade' }),
-  actorId: integer('actor_id')
-    .notNull()
-    .references(() => actors.id),
-  // Freeform markdown body (#24), rendered client-side.
-  body: text('body').notNull(),
-  createdAt: text('created_at')
-    .notNull()
-    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-});
+export const comments = sqliteTable(
+  'comments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    issueId: integer('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    actorId: integer('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    // Freeform markdown body (#24), rendered client-side.
+    body: text('body').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (table) => [
+    // Retrofit (#82): the merged events+comments timeline read needs both sides
+    // symmetric - events gets the same shape index below.
+    index('comments_issue_created_idx').on(table.issueId, table.createdAt),
+  ],
+);
+
+// The durable event spine (#82): a queryable, actor-attributed activity log per
+// issue - the timeline everything else (labels, relationships, mentions, ...)
+// emits into (#84-#87). No project_id column: project delete cascades
+// transitively via issue_id -> issues.project_id (already cascade), exactly as
+// comments does. `type` is a text enum of the full taxonomy (#72/#79); `data` is
+// a single JSON column, validated by a zod discriminated union on `type` (never
+// cast - domain/events.ts), never filtered on - the timeline renders the whole
+// row. Write-once, read-only.
+export const events = sqliteTable(
+  'events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    issueId: integer('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    actorId: integer('actor_id')
+      .notNull()
+      .references(() => actors.id),
+    type: text('type', { enum: EVENT_TYPES }).notNull(),
+    data: text('data').notNull().default('{}'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (table) => [
+    index('events_issue_created_idx').on(table.issueId, table.createdAt),
+  ],
+);

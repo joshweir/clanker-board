@@ -1,9 +1,11 @@
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { EventSchema, type Event } from '../domain/events';
 import type { Db } from './client';
 import {
   boards,
   comments,
+  events,
   issueBlockedBy,
   issueLabels,
   issues,
@@ -115,6 +117,26 @@ export const commentsForIssue = (db: Db, issueId: number): CommentSnapshot[] =>
     .where(eq(comments.issueId, issueId))
     .orderBy(asc(comments.createdAt), asc(comments.id))
     .all();
+
+// An event snapshot is its row with `data` (stored as JSON text) parsed and
+// validated against the discriminated union (#82) - never cast. Shared by the
+// issue-events read route, withEvents' post-commit publish, and the
+// event.created SSE payload, so every read path parses the row the same way.
+export type EventSnapshot = Event;
+
+export const toEventSnapshot = (row: typeof events.$inferSelect): Event =>
+  EventSchema.parse({ ...row, data: JSON.parse(row.data) });
+
+// An issue's events in timeline order: (createdAt, id) - id is monotonic, so it
+// gives a stable tiebreak when a batch of events shares one createdAt (#76/#82).
+export const eventsForIssue = (db: Db, issueId: number): Event[] =>
+  db
+    .select()
+    .from(events)
+    .where(eq(events.issueId, issueId))
+    .orderBy(asc(events.createdAt), asc(events.id))
+    .all()
+    .map(toEventSnapshot);
 
 // column_axis is stored as JSON text (#24) and parsed with zod here - never cast
 // (CLAUDE.md). Ids are positive integers (label ids); the schema also guards the
