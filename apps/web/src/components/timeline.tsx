@@ -53,16 +53,35 @@ export function mergeTimeline(
 // The self-contained one-liner phrasing for an event type, GitHub-style ("<actor>
 // <predicate> <time>"). `opened` never actually reaches here (filtered below,
 // kept for completeness); every other shape is a placeholder until its owning
-// ticket (#84 lifecycle/field/involvement, #85 labels, #86 relationships, #87
-// mentions) gives it real wording (and, where the design calls for it, replaces
-// the plain rail dot with its own icon or adds counterpart links underneath).
+// ticket (#84 lifecycle/field/involvement, #85 labels, #86 relationships) gives
+// it real wording (and, where the design calls for it, replaces the plain rail
+// dot with its own icon or adds counterpart links underneath).
 function eventLine(event: IssueEvent): string {
   switch (event.type) {
     case 'opened':
       return 'opened this';
+    case 'mentioned':
+      return 'mentioned this from';
     default:
       return event.type;
   }
+}
+
+// The `mentioned` row's link back to the SOURCE issue (#87): a plain `<a>`
+// (not the router's `Link`) opening in a new tab, mirroring `IssueKeyLink`
+// (#40) / the mention-link convention already used in rendered markdown
+// (`remark-mentions.ts`'s href shape, `markdown.tsx`'s target/rel) - a
+// snapshot link, not a router navigation, so this component stays free of a
+// router-context dependency.
+function mentionSourceLink(
+  event: IssueEvent,
+): { href: string; label: string } | null {
+  if (event.type !== 'mentioned') return null;
+  const { projectKey, number, title } = event.data;
+  return {
+    href: `/projects/${projectKey.toLowerCase()}/issues/${number}`,
+    label: `${projectKey}-${number} ${title}`,
+  };
 }
 
 export function Timeline({
@@ -123,6 +142,7 @@ export function Timeline({
           }
 
           const { event } = node;
+          const source = mentionSourceLink(event);
           return (
             <li
               key={node.key}
@@ -132,6 +152,13 @@ export function Timeline({
               <p className="timeline-line">
                 <ActorName actorId={event.actorId} actors={actors} />{' '}
                 {eventLine(event)}{' '}
+                {source ? (
+                  <>
+                    <a href={source.href} target="_blank" rel="noopener">
+                      {source.label}
+                    </a>{' '}
+                  </>
+                ) : null}
                 <time dateTime={event.createdAt}>
                   {formatOpened(event.createdAt)}
                 </time>

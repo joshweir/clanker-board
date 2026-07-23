@@ -9,6 +9,7 @@ import {
   toIssue,
 } from '../db/queries';
 import { actors, issues } from '../db/schema';
+import { newlyMentionedTargets } from '../domain/mentions';
 import { rankAfter } from '../domain/rank';
 import type { EventBus } from '../events/bus';
 import { withEvents } from '../events/with-events';
@@ -267,7 +268,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
-      if (!findIssue(db, project.id, number)) {
+      const existing = findIssue(db, project.id, number);
+      if (!existing) {
         return c.json({ error: 'Issue not found' }, 404);
       }
       const patch = c.req.valid('json');
@@ -283,6 +285,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
           return c.json({ error: `No actor with id ${patch.assigneeId}` }, 400);
         }
       }
+      const actorId = c.get('actorId');
       const now = new Date().toISOString();
       // claimedAt tracks when the CURRENT assignee was set, whatever the write
       // path (claim endpoints or this PATCH), so lease staleness (routes/
@@ -291,12 +294,49 @@ export function issuesRouter(db: Db, bus: EventBus) {
         patch.assigneeId === undefined
           ? {}
           : { claimedAt: patch.assigneeId === null ? null : now };
-      const row = db
-        .update(issues)
-        .set({ ...patch, ...claimPatch, updatedAt: now })
-        .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
-        .returning()
-        .get();
+      // The update and its mention scan run in one transaction (#76/#87): a
+      // body change is otherwise silent (#84 owns title/type/state/assignee
+      // diff-events), but it still triggers the mention scan - fired = the
+      // targets newly resolved from the new body but not the old one, so
+      // editing in a fresh reference fires once and removing one retracts
+      // nothing (there is no retraction event type).
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const updated = tx
+            .update(issues)
+            .set({ ...patch, ...claimPatch, updatedAt: now })
+            .where(
+              and(eq(issues.projectId, project.id), eq(issues.number, number)),
+            )
+            .returning()
+            .get();
+          if (updated && patch.body !== undefined) {
+            const targets = newlyMentionedTargets(
+              tx,
+              project.id,
+              project.key,
+              existing.id,
+              existing.body,
+              patch.body,
+            );
+            for (const targetId of targets) {
+              emit({
+                issueId: targetId,
+                type: 'mentioned',
+                data: {
+                  projectKey: project.key,
+                  number: updated.number,
+                  title: updated.title,
+                },
+              });
+            }
+          }
+          return updated;
+        },
+      );
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404);
       }

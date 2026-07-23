@@ -1,15 +1,8 @@
-import type { Db } from '../db/client';
+import type { Db, Tx } from '../db/client';
 import { toEventSnapshot } from '../db/queries';
 import { events } from '../db/schema';
 import { EventPayloadSchema, type EventPayload } from '../domain/events';
 import type { EventBus } from './bus';
-
-// The transaction-scoped handle a withEvents callback runs its own mutation on
-// (#82/#76) - inferred from Db['transaction'] itself so it can never drift from
-// the real drizzle type.
-type Tx = Parameters<Db['transaction']>[0] extends (tx: infer T) => unknown
-  ? T
-  : never;
 
 export type EmitInput = { issueId: number } & EventPayload;
 
