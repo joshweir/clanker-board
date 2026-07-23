@@ -858,6 +858,64 @@ button.danger {
   margin-right: 0.4rem;
 }
 
+/* Mention links (#88): bare tinted inline link - author's typed text preserved
+   verbatim (chosen prototype variant A, prototype/mention-links-78 @ 382fe42).
+   A closed target is muted + strikethrough. Hover/focus reveals the state +
+   title card. */
+.mention {
+  position: relative;
+  color: var(--accent, #4c6ef5);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.mention:hover {
+  text-decoration: underline;
+}
+.mention-closed {
+  color: GrayText;
+  text-decoration: line-through;
+}
+.mention-card {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.3rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, Canvas 92%, CanvasText);
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  color: CanvasText;
+  font-size: 0.8rem;
+  font-weight: 400;
+  white-space: nowrap;
+  z-index: 1;
+}
+.mention:hover .mention-card,
+.mention:focus-visible .mention-card {
+  display: flex;
+}
+.mention-card-title {
+  opacity: 0.8;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mention-dot {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background: #3fb950;
+  flex: 0 0 auto;
+}
+.mention-dot-closed {
+  background: #f85149;
+}
+
 .muted {
   opacity: 0.6;
 }

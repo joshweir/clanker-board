@@ -29,6 +29,13 @@ describe('Markdown', () => {
     );
   });
 
+  test('keeps an ordinary link title attribute (#88 review N1)', () => {
+    const { container } = render(
+      <Markdown source='[text](https://example.com "a title")' />,
+    );
+    expect(container.querySelector('a')?.getAttribute('title')).toBe('a title');
+  });
+
   test('renders headings with an accessible level', () => {
     render(<Markdown source="## Section" />);
     expect(
@@ -79,5 +86,108 @@ describe('Markdown', () => {
       <Markdown source={'<script>alert(1)</script> text'} />,
     );
     expect(container.querySelector('script')).toBeNull();
+  });
+});
+
+// Mention links (#88): #KEY-N / KEY-N / #N resolved against the in-memory project
+// issue set, through the real react-markdown + rehype-sanitize pipeline (never
+// loosened generally - only `data-mention-*` + rehype-sanitize's existing `a`
+// allow-list survive).
+describe('Markdown - mention links', () => {
+  const mentions = {
+    projectKey: 'DEMO',
+    issues: [
+      {
+        number: 1,
+        key: 'DEMO-1',
+        title: 'First issue',
+        state: 'open' as const,
+      },
+      {
+        number: 2,
+        key: 'DEMO-2',
+        title: 'Second issue',
+        state: 'closed' as const,
+      },
+    ],
+  };
+
+  test('renders all three forms as links to the target issue', () => {
+    const { container } = render(
+      <Markdown
+        source="hashed #DEMO-1, bare DEMO-1, and #2 by number"
+        mentions={mentions}
+      />,
+    );
+    const links = [...container.querySelectorAll('a.mention')];
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/projects/demo/issues/1',
+      '/projects/demo/issues/1',
+      '/projects/demo/issues/2',
+    ]);
+    // Author's typed text is preserved verbatim, not normalised.
+    expect(links.map((a) => a.firstChild?.textContent)).toEqual([
+      '#DEMO-1',
+      'DEMO-1',
+      '#2',
+    ]);
+  });
+
+  test('opens the target standalone page in a new tab (mirrors IssueKeyLink)', () => {
+    const { container } = render(
+      <Markdown source="see #DEMO-1" mentions={mentions} />,
+    );
+    const link = container.querySelector('a.mention');
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener');
+  });
+
+  test('a closed target is muted + strikethrough', () => {
+    const { container } = render(
+      <Markdown source="closes #2" mentions={mentions} />,
+    );
+    expect(container.querySelector('a.mention.mention-closed')).not.toBeNull();
+    expect(
+      container.querySelector('a.mention:not(.mention-closed)'),
+    ).toBeNull();
+  });
+
+  test('the hover card shows the key and title', () => {
+    const { container } = render(
+      <Markdown source="see #DEMO-1" mentions={mentions} />,
+    );
+    const card = container.querySelector('.mention-card');
+    expect(card?.textContent).toContain('DEMO-1');
+    expect(card?.textContent).toContain('Open');
+    expect(container.querySelector('.mention-card-title')?.textContent).toBe(
+      'First issue',
+    );
+  });
+
+  test('look-alikes stay plain text: unknown key/number, foreign project', () => {
+    const { container } = render(
+      <Markdown
+        source="SOC-2 and UTF-8 and #99999 and FOO-9 are not mentions"
+        mentions={mentions}
+      />,
+    );
+    expect(container.querySelectorAll('a.mention')).toHaveLength(0);
+    expect(container.textContent).toContain(
+      'SOC-2 and UTF-8 and #99999 and FOO-9 are not mentions',
+    );
+  });
+
+  test('a mention-shaped code span stays plain text, not a link', () => {
+    const { container } = render(
+      <Markdown source="fixed in `#DEMO-1` earlier" mentions={mentions} />,
+    );
+    expect(container.querySelectorAll('a.mention')).toHaveLength(0);
+    expect(container.querySelector('code')?.textContent).toBe('#DEMO-1');
+  });
+
+  test('without a mentions prop, mention-shaped text stays plain (no resolver)', () => {
+    const { container } = render(<Markdown source="see #DEMO-1" />);
+    expect(container.querySelectorAll('a.mention')).toHaveLength(0);
+    expect(container.textContent).toContain('see #DEMO-1');
   });
 });

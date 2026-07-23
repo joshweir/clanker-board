@@ -435,7 +435,10 @@ export function IssueDetail({
                 editLabel="Edit description"
                 view={
                   current.body.trim().length > 0 ? (
-                    <Markdown source={current.body} />
+                    <Markdown
+                      source={current.body}
+                      mentions={{ projectKey: slug.toUpperCase(), issues }}
+                    />
                   ) : (
                     <p className="muted">No description. Click to add one.</p>
                   )
@@ -473,7 +476,10 @@ export function IssueDetail({
                     </time>
                   </div>
                   <div className="comment-body">
-                    <Markdown source={comment.body} />
+                    <Markdown
+                      source={comment.body}
+                      mentions={{ projectKey: slug.toUpperCase(), issues }}
+                    />
                   </div>
                 </li>
               ))}

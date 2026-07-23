@@ -90,6 +90,9 @@ importers:
       '@clanker/api':
         specifier: workspace:*
         version: link:../api
+      '@clanker/mentions':
+        specifier: workspace:*
+        version: link:../../packages/mentions
       '@hello-pangea/dnd':
         specifier: ^18.0.1
         version: 18.0.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
