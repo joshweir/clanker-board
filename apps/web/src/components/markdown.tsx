@@ -52,11 +52,18 @@ type LinkProps = ComponentPropsWithoutRef<'a'> & ExtraProps;
 // or a mention left unresolved as plain text upstream) renders as a plain
 // anchor, untouched. Click opens the target's own page in a new tab, mirroring
 // `IssueKeyLink` (#40). Closed target: muted + strikethrough.
-function MentionAwareLink({ href, node, children }: LinkProps) {
+function MentionAwareLink({ href, node, children, ...rest }: LinkProps) {
   const props = node?.properties ?? {};
   const key = props.dataMentionKey;
   if (typeof key !== 'string') {
-    return <a href={href}>{children}</a>;
+    // Not a mention: this `a` override governs every link react-markdown
+    // renders, so the rest of the anchor's props (e.g. `title`) must pass
+    // through untouched (#88 review N1) rather than being dropped.
+    return (
+      <a href={href} {...rest}>
+        {children}
+      </a>
+    );
   }
   const open = props.dataMentionOpen === 'true';
   const title =
@@ -69,7 +76,11 @@ function MentionAwareLink({ href, node, children }: LinkProps) {
       className={open ? 'mention' : 'mention mention-closed'}
     >
       {children}
-      <span className="mention-card" role="tooltip">
+      {/* Decorative: the link already names the target via `children` (the
+          typed text) - without `aria-hidden`, screen readers would announce
+          this card's text too, inflating the link's accessible name (#88
+          review N2). */}
+      <span className="mention-card" role="tooltip" aria-hidden="true">
         <span
           className={open ? 'mention-dot' : 'mention-dot mention-dot-closed'}
         />

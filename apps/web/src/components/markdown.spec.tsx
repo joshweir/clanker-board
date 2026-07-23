@@ -29,6 +29,13 @@ describe('Markdown', () => {
     );
   });
 
+  test('keeps an ordinary link title attribute (#88 review N1)', () => {
+    const { container } = render(
+      <Markdown source='[text](https://example.com "a title")' />,
+    );
+    expect(container.querySelector('a')?.getAttribute('title')).toBe('a title');
+  });
+
   test('renders headings with an accessible level', () => {
     render(<Markdown source="## Section" />);
     expect(

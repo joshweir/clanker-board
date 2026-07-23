@@ -47,7 +47,17 @@ function walk(node: MdNode, resolve: MentionResolver): void {
   if (!node.children) return;
   const next: MdNode[] = [];
   for (const child of node.children) {
-    if (child.type === 'inlineCode' || child.type === 'code') {
+    // `link` is pushed unchanged like `inlineCode`/`code` (#88 review B1): a
+    // resolved mention is a `link` node, so recursing into an *existing* link's
+    // text would let a match get split out as a NESTED link. That breaks the
+    // author's own link/autolink (an empty outer `<a>`, or a pasted URL's
+    // visible text truncated and its middle segment repointed) - mentions only
+    // ever come from plain-text runs, never from inside a link.
+    if (
+      child.type === 'inlineCode' ||
+      child.type === 'code' ||
+      child.type === 'link'
+    ) {
       next.push(child);
       continue;
     }

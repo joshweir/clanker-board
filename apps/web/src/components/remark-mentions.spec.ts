@@ -117,6 +117,56 @@ describe('remarkMentions - mdast text-node walk', () => {
     expect(tree.children).toEqual([{ type: 'code', value: '#DEMO-1' }]);
   });
 
+  test('never descends into an existing link (#88 review B1)', () => {
+    // A manual markdown link `[#DEMO-1](https://example.com)` - the mdast `link`
+    // node's own text child must not be split out into a nested link, or the
+    // author's link becomes an empty, unclickable anchor.
+    const tree: MdNode = {
+      type: 'root',
+      children: [
+        {
+          type: 'link',
+          url: 'https://example.com',
+          children: [{ type: 'text', value: '#DEMO-1' }],
+        },
+      ],
+    };
+    remarkMentions((m) => resolve(m.raw))(tree);
+    expect(tree.children).toEqual([
+      {
+        type: 'link',
+        url: 'https://example.com',
+        children: [{ type: 'text', value: '#DEMO-1' }],
+      },
+    ]);
+  });
+
+  test('never descends into a gfm autolink (#88 review B1)', () => {
+    // remark-gfm turns a pasted bare URL into a `link` node before this plugin
+    // runs - same guard: a mention-shaped substring in the URL's own visible
+    // text must not be split out.
+    const tree: MdNode = {
+      type: 'root',
+      children: [
+        {
+          type: 'link',
+          url: 'https://example.com/DEMO-1/more',
+          children: [
+            { type: 'text', value: 'https://example.com/DEMO-1/more' },
+          ],
+        },
+      ],
+    };
+    remarkMentions((m) => resolve(m.raw))(tree);
+    expect(tree.children).toEqual([
+      {
+        type: 'link',
+        url: 'https://example.com/DEMO-1/more',
+        children: [{ type: 'text', value: 'https://example.com/DEMO-1/more' }],
+      },
+    ]);
+  });
+
   test('walks into nested children (e.g. a list item)', () => {
     const tree: MdNode = {
       type: 'root',

@@ -257,10 +257,9 @@ describe('issue modal', () => {
     await user.click(await screen.findByText('Wire the board'));
     await screen.findByLabelText('Edit title');
 
-    // The link's accessible name also picks up its nested hover-card text
-    // (key/state/title), so match on the visible prefix rather than the
-    // full concatenated name.
-    const mention = await screen.findByRole('link', { name: /^#DEMO-2/ });
+    // The hover card is `aria-hidden` (#88 review N2), so the link's
+    // accessible name is just its visible typed text, not the card's too.
+    const mention = await screen.findByRole('link', { name: '#DEMO-2' });
     expect(mention.getAttribute('href')).toBe('/projects/demo/issues/2');
     expect(mention.getAttribute('target')).toBe('_blank');
     expect(mention.getAttribute('rel')).toBe('noopener');
