@@ -71,7 +71,11 @@ describe('findMentions - grammar+resolution boundary (look-alikes)', () => {
   const KNOWN_PROJECT = 'DEMO';
   const KNOWN_ISSUE_NUMBERS = new Set([1, 2, 3]);
 
-  function resolves(mention: Mention): boolean {
+  // Accepts `undefined` too, so a test can assert "never resolves" without a
+  // non-null assertion - if the grammar somehow found nothing, `resolves`
+  // just says so truthfully (false) rather than the test needing to force it.
+  function resolves(mention: Mention | undefined): boolean {
+    if (!mention) return false;
     if (mention.form === 'number')
       return KNOWN_ISSUE_NUMBERS.has(mention.number);
     return (
@@ -83,24 +87,24 @@ describe('findMentions - grammar+resolution boundary (look-alikes)', () => {
   test('SOC-2 is grammar-shaped like a key but never resolves', () => {
     const [mention] = findMentions('per SOC-2 requirements');
     expect(mention).toMatchObject({ form: 'key', keyPrefix: 'SOC', number: 2 });
-    expect(resolves(mention!)).toBe(false);
+    expect(resolves(mention)).toBe(false);
   });
 
   test('UTF-8 is grammar-shaped like a key but never resolves', () => {
     const [mention] = findMentions('encoded as UTF-8');
     expect(mention).toMatchObject({ form: 'key', keyPrefix: 'UTF', number: 8 });
-    expect(resolves(mention!)).toBe(false);
+    expect(resolves(mention)).toBe(false);
   });
 
   test('#99999 is grammar-shaped like a bare number but never resolves', () => {
     const [mention] = findMentions('see #99999 for the ticket');
     expect(mention).toMatchObject({ form: 'number', number: 99999 });
-    expect(resolves(mention!)).toBe(false);
+    expect(resolves(mention)).toBe(false);
   });
 
   test('an unknown key prefix (foreign/unrecognized project) never resolves', () => {
     const [mention] = findMentions('tracked in FOO-9 upstream');
     expect(mention).toMatchObject({ form: 'key', keyPrefix: 'FOO', number: 9 });
-    expect(resolves(mention!)).toBe(false);
+    expect(resolves(mention)).toBe(false);
   });
 });
