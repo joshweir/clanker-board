@@ -14,18 +14,22 @@ export type ApiClient = ReturnType<typeof hc<AppType>>;
 // Call sites never mention the actor again.
 export function createClient(fetchImpl?: typeof fetch): ApiClient {
   const baseFetch = fetchImpl ?? fetch;
-  let actorId: Promise<number> | undefined;
+  // Cache the resolved id, not the in-flight promise - a rejected promise
+  // (transient network blip, momentary empty-actor race) must not stick
+  // forever, or every later request through this client throws until reload.
+  let actorId: number | undefined;
   const resolveActorId = async () => {
-    actorId ??= (async () => {
-      const rows: { id: number; kind: string }[] = await (
-        await baseFetch('/api/actors')
-      ).json();
-      const human = rows.find((row) => row.kind === 'human');
-      if (!human) {
-        throw new Error('no human actor exists on this instance');
-      }
-      return human.id;
-    })();
+    if (actorId !== undefined) {
+      return actorId;
+    }
+    const rows: { id: number; kind: string }[] = await (
+      await baseFetch('/api/actors')
+    ).json();
+    const human = rows.find((row) => row.kind === 'human');
+    if (!human) {
+      throw new Error('no human actor exists on this instance');
+    }
+    actorId = human.id;
     return actorId;
   };
   const withActor: typeof fetch = async (input, init) => {
