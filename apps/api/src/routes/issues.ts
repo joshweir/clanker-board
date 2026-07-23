@@ -11,6 +11,7 @@ import {
 import { actors, issues } from '../db/schema';
 import { rankAfter } from '../domain/rank';
 import type { EventBus } from '../events/bus';
+import { withEvents } from '../events/with-events';
 import type { ActorEnv } from '../middleware/actor';
 import { LabelSchema } from './labels';
 import { idParam, jsonBody, SlugParamSchema } from './openapi';
@@ -212,19 +213,37 @@ export function issuesRouter(db: Db, bus: EventBus) {
         .get();
       const number = (agg?.maxNumber ?? 0) + 1;
       const rank = rankAfter(agg?.maxRank ?? null);
-      const row = db
-        .insert(issues)
-        .values({
-          projectId: project.id,
-          number,
-          title,
-          type,
-          body: body ?? '',
-          rank,
-          authorId: c.get('actorId'),
-        })
-        .returning()
-        .get();
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      // The mutation and its `opened` event insert run in one transaction
+      // (#76/#82): a rolled-back create never leaves a phantom event, and the
+      // event.created broadcast fires only once the create has committed.
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const created = tx
+            .insert(issues)
+            .values({
+              projectId: project.id,
+              number,
+              title,
+              type,
+              body: body ?? '',
+              rank,
+              authorId: actorId,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .returning()
+            .get();
+          // Create always emits `opened` (actor = context actor = new authorId,
+          // data: {}) - the one event this ticket (#82) actually fires.
+          emit({ issueId: created.id, type: 'opened', data: {} });
+          return created;
+        },
+      );
       // A brand-new issue has no labels, no parent, and no blockers (ready).
       const issue = toIssue(db, row, project.key);
       bus.publishIssueChanged(project.id, issue);

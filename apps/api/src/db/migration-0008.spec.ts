@@ -15,9 +15,12 @@ import * as schema from './schema';
 
 const migrationsFolder = join(import.meta.dirname, '../../drizzle');
 
-// A throwaway copy of the real migrations folder with 0008 removed, so a fresh
-// db can be brought to the pre-#81 schema and seeded with legacy data before
-// 0008 (the migration under test) runs on top of it.
+// A throwaway copy of the real migrations folder with 0008 and everything after
+// it removed, so a fresh db can be brought to the pre-#81 schema and seeded with
+// legacy data before 0008 (the migration under test) runs on top of it. Cuts at
+// 0008 rather than naming every later migration by tag, so a migration added
+// after 0008 (e.g. #82's 0009, which reads the author_id column 0008 adds)
+// doesn't reintroduce this same "no such column" break on its own arrival.
 function preMigrationFolder(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pre-0008-'));
   cpSync(migrationsFolder, dir, { recursive: true });
@@ -25,11 +28,18 @@ function preMigrationFolder(): string {
   const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
     entries: { tag: string }[];
   };
-  journal.entries = journal.entries.filter(
-    (e) => e.tag !== '0008_issues_author_id',
+  const cutoff = journal.entries.findIndex(
+    (e) => e.tag === '0008_issues_author_id',
   );
+  const [kept, dropped] = [
+    journal.entries.slice(0, cutoff),
+    journal.entries.slice(cutoff),
+  ];
+  journal.entries = kept;
   writeFileSync(journalPath, JSON.stringify(journal));
-  rmSync(join(dir, '0008_issues_author_id.sql'));
+  for (const entry of dropped) {
+    rmSync(join(dir, `${entry.tag}.sql`));
+  }
   return dir;
 }
 

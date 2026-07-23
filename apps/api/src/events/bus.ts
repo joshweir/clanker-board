@@ -1,6 +1,7 @@
 import type {
   BoardSnapshot,
   CommentSnapshot,
+  EventSnapshot,
   IssueSnapshot,
   LabelSnapshot,
   ProjectSnapshot,
@@ -29,7 +30,12 @@ export type ProjectEvent =
   | { event: 'comment.created'; data: CommentSnapshot }
   // The board's column_axis was replaced (#24): every open board re-lays-out from
   // the snapshot's new axis.
-  | { event: 'board.changed'; data: BoardSnapshot };
+  | { event: 'board.changed'; data: BoardSnapshot }
+  // Events are write-once (#82), so there is only a created event - an open
+  // client appends the new event by id without a reload, mirroring
+  // comment.created. A mutation publishes this alongside issue.changed - the
+  // timeline needs the row itself (issue.changed carries no event history).
+  | { event: 'event.created'; data: EventSnapshot };
 
 type Listener<T> = (message: T) => void;
 
@@ -134,6 +140,12 @@ export function createEventBus() {
       projectChannel(projectId).publish({
         event: 'board.changed',
         data: board,
+      });
+    },
+    publishEventCreated(projectId: number, event: EventSnapshot): void {
+      projectChannel(projectId).publish({
+        event: 'event.created',
+        data: event,
       });
     },
   };

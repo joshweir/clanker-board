@@ -8,6 +8,7 @@ import { boardRouter } from './routes/board';
 import { claimsRouter } from './routes/claims';
 import { commentsRouter } from './routes/comments';
 import { eventsRouter } from './routes/events';
+import { issueEventsRouter } from './routes/issue-events';
 import { issuesRouter } from './routes/issues';
 import { labelsRouter } from './routes/labels';
 import { projectsRouter } from './routes/projects';
@@ -44,6 +45,7 @@ export function createApp(db: Db) {
     .route('/api', labelsRouter(db, bus))
     .route('/api', relationshipsRouter(db, bus))
     .route('/api', commentsRouter(db, bus))
+    .route('/api', issueEventsRouter(db))
     .route('/api', searchRouter(db))
     .route('/api', boardRouter(db, bus))
     .route('/api', actorsRouter(db))
