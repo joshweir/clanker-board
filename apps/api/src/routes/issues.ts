@@ -267,7 +267,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
-      if (!findIssue(db, project.id, number)) {
+      const before = findIssue(db, project.id, number);
+      if (!before) {
         return c.json({ error: 'Issue not found' }, 404);
       }
       const patch = c.req.valid('json');
@@ -284,6 +285,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
         }
       }
       const now = new Date().toISOString();
+      const actorId = c.get('actorId');
       // claimedAt tracks when the CURRENT assignee was set, whatever the write
       // path (claim endpoints or this PATCH), so lease staleness (routes/
       // claims.ts) has one consistent meaning; unassigning clears it.
@@ -291,12 +293,64 @@ export function issuesRouter(db: Db, bus: EventBus) {
         patch.assigneeId === undefined
           ? {}
           : { claimedAt: patch.assigneeId === null ? null : now };
-      const row = db
-        .update(issues)
-        .set({ ...patch, ...claimPatch, updatedAt: now })
-        .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
-        .returning()
-        .get();
+      // The mutation and its discrete lifecycle/field/involvement events (#84)
+      // run in one transaction: diff the before-row against the `.returning()`
+      // after-row field-by-field, emitting one event per genuinely-changed
+      // event-worthy field. A field sent equal to its current value (or a field
+      // never sent at all) leaves before === after, so it emits nothing - `body`
+      // and `rank` are never diffed at all (silent by omission).
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const updated = tx
+            .update(issues)
+            .set({ ...patch, ...claimPatch, updatedAt: now })
+            .where(
+              and(eq(issues.projectId, project.id), eq(issues.number, number)),
+            )
+            .returning()
+            .get();
+          if (before.title !== updated.title) {
+            emit({
+              issueId: updated.id,
+              type: 'renamed',
+              data: { from: before.title, to: updated.title },
+            });
+          }
+          if (before.type !== updated.type) {
+            emit({
+              issueId: updated.id,
+              type: 'typed',
+              data: { from: before.type, to: updated.type },
+            });
+          }
+          if (before.state !== updated.state) {
+            emit({
+              issueId: updated.id,
+              type: updated.state === 'closed' ? 'closed' : 'reopened',
+              data: {},
+            });
+          }
+          if (before.assigneeId !== updated.assigneeId) {
+            if (updated.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'assigned',
+                data: { assigneeActorId: updated.assigneeId },
+              });
+            } else if (before.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'unassigned',
+                data: { assigneeActorId: before.assigneeId },
+              });
+            }
+          }
+          return updated;
+        },
+      );
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404);
       }
