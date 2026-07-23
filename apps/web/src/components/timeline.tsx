@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Actor, Comment, IssueEvent } from '../api';
 import { formatOpened } from '../lib/relative-time';
+import { colorFor } from '../type-color';
 import { ActorName } from './actor-name';
 import { Markdown } from './markdown';
 import type { MentionableIssue } from './remark-mentions';
@@ -50,16 +51,35 @@ export function mergeTimeline(
   });
 }
 
+// A label's chip, colored via `colorFor(labelId)` (#85) - color is never stored
+// (labels have no color column), so it is re-derived here from the frozen
+// {labelId, name} snapshot on the event, not read live off the label.
+function labelChip({ labelId, name }: { labelId: number; name: string }) {
+  const { bg, fg } = colorFor(labelId);
+  return (
+    <span
+      className="label-chip"
+      style={{ backgroundColor: bg, color: fg, borderColor: bg }}
+    >
+      {name}
+    </span>
+  );
+}
+
 // The self-contained one-liner phrasing for an event type, GitHub-style ("<actor>
 // <predicate> <time>"). `opened` never actually reaches here (filtered below,
 // kept for completeness); every other shape is a placeholder until its owning
-// ticket (#84 lifecycle/field/involvement, #85 labels, #86 relationships, #87
-// mentions) gives it real wording (and, where the design calls for it, replaces
-// the plain rail dot with its own icon or adds counterpart links underneath).
-function eventLine(event: IssueEvent): string {
+// ticket (#84 lifecycle/field/involvement, #86 relationships, #87 mentions)
+// gives it real wording (and, where the design calls for it, replaces the plain
+// rail dot with its own icon or adds counterpart links underneath).
+function eventLine(event: IssueEvent): ReactNode {
   switch (event.type) {
     case 'opened':
       return 'opened this';
+    case 'labeled':
+      return <>added {labelChip(event.data)}</>;
+    case 'unlabeled':
+      return <>removed {labelChip(event.data)}</>;
     default:
       return event.type;
   }
