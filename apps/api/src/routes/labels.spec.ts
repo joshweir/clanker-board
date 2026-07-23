@@ -1,17 +1,16 @@
 import { z } from '@hono/zod-openapi';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createApp } from '../app';
-import { createDb } from '../db/client';
+import { testApp } from '../test/app';
 import { nextEventOfType, readEvents } from '../test/sse';
 import { IssueSchema } from './issues';
 import { LabelSchema } from './labels';
 
 // Seam 1: drive the real Hono app through app.request against a real in-memory
 // SQLite with migrations applied. No mocking of Drizzle, SQLite, or the bus.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof testApp>['app'];
 
 beforeEach(() => {
-  app = createApp(createDb(':memory:'));
+  ({ app } = testApp());
 });
 
 const json = (body: unknown) => ({

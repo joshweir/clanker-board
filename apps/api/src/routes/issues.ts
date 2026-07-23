@@ -11,6 +11,7 @@ import {
 import { actors, issues } from '../db/schema';
 import { rankAfter } from '../domain/rank';
 import type { EventBus } from '../events/bus';
+import type { ActorEnv } from '../middleware/actor';
 import { LabelSchema } from './labels';
 import { idParam, jsonBody, SlugParamSchema } from './openapi';
 import { ErrorSchema } from './projects';
@@ -154,7 +155,7 @@ const deleteIssueRoute = createRoute({
 });
 
 export function issuesRouter(db: Db, bus: EventBus) {
-  return new OpenAPIHono({
+  return new OpenAPIHono<ActorEnv>({
     // Validation failures surface as 400 + a useful message (trust boundary).
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -220,6 +221,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
           type,
           body: body ?? '',
           rank,
+          authorId: c.get('actorId'),
         })
         .returning()
         .get();

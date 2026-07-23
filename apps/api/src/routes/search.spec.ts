@@ -1,17 +1,15 @@
 import { z } from '@hono/zod-openapi';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createApp } from '../app';
-import { createDb } from '../db/client';
 import { sanitizeFtsQuery } from '../db/search';
-import { ActorSchema } from './actors';
+import { testApp } from '../test/app';
 
 // Seam 1: drive the real Hono app through app.request against a real in-memory
 // SQLite with the FTS5 migration + triggers applied. No mocking of Drizzle, SQLite,
 // or the index - the genuine porter/unicode61 tokenizer does the ranking.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof testApp>['app'];
 
 beforeEach(() => {
-  app = createApp(createDb(':memory:'));
+  ({ app } = testApp());
 });
 
 const json = (body: unknown) => ({
@@ -33,25 +31,10 @@ const createIssue = async (
     ...json({ title, type, body }),
   });
 
-const createActor = async (name = 'Ada', kind = 'human') =>
-  ActorSchema.parse(
-    await (
-      await app.request('/api/actors', {
-        method: 'POST',
-        ...json({ name, kind }),
-      })
-    ).json(),
-  );
-
-const postComment = async (
-  slug: string,
-  number: number,
-  body: string,
-  actorId: number,
-) =>
+const postComment = async (slug: string, number: number, body: string) =>
   app.request(`/api/projects/${slug}/issues/${number}/comments`, {
     method: 'POST',
-    ...json({ actorId, body }),
+    ...json({ body }),
   });
 
 // The response contract the route documents; parsing it here doubles as a schema check.
@@ -126,8 +109,7 @@ describe('GET /api/projects/:slug/search', () => {
 
   test('finds an issue by a word in a comment, reporting matchedIn=comment', async () => {
     await createIssue('demo', 'Untitled', 'nothing here');
-    const actor = await createActor();
-    await postComment('demo', 1, 'the regression is in the parser', actor.id);
+    await postComment('demo', 1, 'the regression is in the parser');
     const { body } = await search('demo', 'q=regression');
     expect(body.total).toBe(1);
     expect(body.results[0]?.matchedIn).toBe('comment');
@@ -171,8 +153,7 @@ describe('GET /api/projects/:slug/search', () => {
 
   test('collapses an issue matching in several places to a single result', async () => {
     await createIssue('demo', 'widget title', 'widget body');
-    const actor = await createActor();
-    await postComment('demo', 1, 'widget comment', actor.id);
+    await postComment('demo', 1, 'widget comment');
     const { body } = await search('demo', 'q=widget');
     expect(body.total).toBe(1);
     // The strongest (title) match wins the collapse.
@@ -273,8 +254,7 @@ describe('GET /api/projects/:slug/search', () => {
 
   test('a deleted issue drops out of the index (and takes its comment rows with it)', async () => {
     await createIssue('demo', 'doomed', 'doomed body');
-    const actor = await createActor();
-    await postComment('demo', 1, 'doomed comment', actor.id);
+    await postComment('demo', 1, 'doomed comment');
     expect((await search('demo', 'q=doomed')).body.total).toBe(1);
     await app.request('/api/projects/demo/issues/1', { method: 'DELETE' });
     expect((await search('demo', 'q=doomed')).body.total).toBe(0);

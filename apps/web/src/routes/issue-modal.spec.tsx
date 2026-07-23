@@ -153,10 +153,15 @@ describe('issue modal', () => {
         })
       ).json(),
     );
-    await client.api.projects[':slug'].issues[':number'].comments.$post({
-      param: { slug, number: String(number) },
-      json: { actorId, body: 'Looks good to me' },
-    });
+    // Override the client's default X-Actor-Id (#81) so this comment is
+    // attributed to Agent Smith rather than the modal's own actor.
+    await client.api.projects[':slug'].issues[':number'].comments.$post(
+      {
+        param: { slug, number: String(number) },
+        json: { body: 'Looks good to me' },
+      },
+      { headers: { 'X-Actor-Id': String(actorId) } },
+    );
 
     expect(await screen.findByText('Looks good to me')).toBeDefined();
   });
