@@ -1,7 +1,9 @@
 // "Opened ..." relative time for the ticket meta card (#40). Same-day timestamps read
 // as a relative distance ("3 hours ago"); older ones read as an absolute date
-// ("on 22 Jul"), gaining the year once it differs from now ("on 22 Jul 2025"). Native
-// Intl does both, so no date library is needed.
+// ("22 Jul"), gaining the year once it differs from now ("22 Jul 2025"). Native
+// Intl does both, so no date library is needed. The "on " prefix was dropped
+// everywhere (#83) so the wording matches the timeline verbatim ("opened 22 Jul",
+// not "opened on 22 Jul").
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 const MINUTE_MS = 60_000;
@@ -28,5 +30,5 @@ export function formatOpened(iso: string, now: Date = new Date()): string {
     then.getFullYear() === now.getFullYear()
       ? { day: 'numeric', month: 'short' }
       : { day: 'numeric', month: 'short', year: 'numeric' };
-  return `on ${then.toLocaleDateString('en-GB', opts)}`;
+  return then.toLocaleDateString('en-GB', opts);
 }

@@ -70,6 +70,14 @@ export type Comment = InferResponseType<
   200
 >[number];
 
+// A timeline event (#82/#83): the discriminated-union row the issue's activity
+// rail merges with its comments, ordered (createdAt, id). Named `IssueEvent` (not
+// `Event`) so it never shadows the DOM's own `Event` type in a web module.
+export type IssueEvent = InferResponseType<
+  ApiClient['api']['projects'][':slug']['issues'][':number']['events']['$get'],
+  200
+>[number];
+
 // Instance-level identities (#28), caller-asserted (no auth). The modal attributes
 // comments and the assignee to an actor.
 export type Actor = InferResponseType<

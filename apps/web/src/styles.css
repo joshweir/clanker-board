@@ -900,13 +900,113 @@ button.danger {
   opacity: 0.6;
 }
 
-.comment-list {
+/* GitHub-style activity rail (#77/#83), Variant A "Classic rail": one continuous
+   vertical spine (shifted right); event icons sit on the spine; comments are
+   full-width cards aligned with the description (not indented to the rail) with
+   the spine hidden behind their opaque fill; the composer sits at the very
+   bottom of the stream. */
+.timeline {
+  /* Cancels .issue-main's own gap so the rail's connector (below) emerges
+     straight out of the description card's base, with no visible heading. */
+  margin-top: 0;
+}
+
+.timeline-rail {
   list-style: none;
-  margin: 0 0 0.75rem;
+  margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  position: relative;
+}
+
+/* Connector: a short length of spine bridging the description card's base to the
+   first row, so the rail visibly grows out of the description above it. */
+.timeline-rail::before {
+  content: '';
+  position: absolute;
+  left: 2rem;
+  top: -1rem;
+  height: 1.2rem;
+  width: 2px;
+  background: color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.timeline-node {
+  position: relative;
+  padding: 0 0 0.9rem 3.2rem;
+}
+
+/* The continuous spine, one segment per row (visually joins into one line). */
+.timeline-node::before {
+  content: '';
+  position: absolute;
+  left: 2rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.timeline-node:last-of-type::before {
+  bottom: auto;
+  height: 0.7rem;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: 1.3rem;
+  top: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: Canvas;
+  border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+.timeline-line {
+  margin: 0;
+  /* Shares the dot's 1.5rem band so the text centre lines up with the icon
+     centre, whatever the line's tallest inline element. */
+  min-height: 1.5rem;
+  line-height: 1.5rem;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, CanvasText 78%, Canvas);
+}
+
+.timeline-line time {
+  color: color-mix(in srgb, CanvasText 50%, Canvas);
+}
+
+/* A comment is a full-width card aligned with the description card above (no
+   rail indent); the spine runs behind it and the card's opaque fill hides it, so
+   the rail meets the card's top edge and resumes from its bottom edge. */
+.timeline-node-comment {
+  padding-left: 0;
+  padding-bottom: 1rem;
+}
+
+.timeline-node-comment .comment {
+  position: relative;
+  background: Canvas;
+}
+
+.timeline-composer {
+  padding-left: 3.2rem;
+}
+
+/* Live-insertion highlight (#83): a brief background flash so a newly-appended
+   row is easy to spot without a refresh. */
+@keyframes timeline-fresh-flash {
+  from {
+    background: color-mix(in srgb, #0969da 18%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.timeline-fresh {
+  animation: timeline-fresh-flash 2.2s ease-out;
+  border-radius: 0.5rem;
 }
 
 /* Comments share the description card's shape (#40): a grey header strip (author +

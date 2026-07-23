@@ -55,7 +55,10 @@ async function readIssue(client: ApiClient, number: number) {
 }
 
 // Seed a project with one placed card, mount the board, and open the card's modal.
-async function openCardModal() {
+// `extraSeed` runs inside the same pre-mount seed (harness.tsx: "seed runs before
+// mount") so e.g. an actor it creates is already in IssueDetail's once-loaded
+// actors list by the time the modal opens.
+async function openCardModal(extraSeed?: (client: ApiClient) => Promise<void>) {
   let number = 0;
   const { client, router, user } = await renderApp(async (client) => {
     await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } });
@@ -70,6 +73,9 @@ async function openCardModal() {
       param,
       json: { columnAxis: [todo] },
     });
+    if (extraSeed) {
+      await extraSeed(client);
+    }
   });
   await router.navigate({ to: '/projects/$slug', params: { slug } });
   await user.click(await screen.findByText('Wire the board'));
@@ -94,7 +100,7 @@ describe('issue modal', () => {
     await user.type(title, 'Renamed inline');
 
     // Sticky: clicking elsewhere in the modal does not save or leave edit mode.
-    await user.click(screen.getByRole('heading', { name: 'Comments' }));
+    await user.click(screen.getByRole('region', { name: 'Activity' }));
     expect(screen.getByLabelText<HTMLInputElement>('Title').value).toBe(
       'Renamed inline',
     );
@@ -143,16 +149,20 @@ describe('issue modal', () => {
     expect(await screen.findByText('Remote body')).toBeDefined();
   });
 
-  test('a comment created elsewhere appends live', async () => {
-    const { client, number } = await openCardModal();
+  test('a comment created elsewhere appends live, badged for an agent actor', async () => {
+    let actorId = 0;
+    // Seeded pre-mount so IssueDetail's once-loaded actors list already has it
+    // (see openCardModal's `extraSeed` doc comment).
+    const { client, number } = await openCardModal(async (client) => {
+      actorId = expectId(
+        await (
+          await client.api.actors.$post({
+            json: { name: 'Agent Smith', kind: 'agent' },
+          })
+        ).json(),
+      );
+    });
 
-    const actorId = expectId(
-      await (
-        await client.api.actors.$post({
-          json: { name: 'Agent Smith', kind: 'agent' },
-        })
-      ).json(),
-    );
     // Override the client's default X-Actor-Id (#81) so this comment is
     // attributed to Agent Smith rather than the modal's own actor.
     await client.api.projects[':slug'].issues[':number'].comments.$post(
@@ -163,7 +173,11 @@ describe('issue modal', () => {
       { headers: { 'X-Actor-Id': String(actorId) } },
     );
 
-    expect(await screen.findByText('Looks good to me')).toBeDefined();
+    const row = (await screen.findByText('Looks good to me')).closest(
+      '.timeline-node',
+    );
+    // The shared actor-display helper (#81/#83) badges the agent.
+    expect(row?.querySelector('.actor-kind-badge')).not.toBeNull();
   });
 
   test('composing a comment posts it add-only and it appears', async () => {
@@ -173,6 +187,22 @@ describe('issue modal', () => {
     await user.click(screen.getByRole('button', { name: 'Comment' }));
 
     expect(await screen.findByText('My first note')).toBeDefined();
+  });
+
+  test('the activity rail has no redundant "opened" row - the description card already carries it', async () => {
+    const { user } = await openCardModal();
+
+    await user.type(screen.getByLabelText('Add a comment'), 'One comment');
+    await user.click(screen.getByRole('button', { name: 'Comment' }));
+    await screen.findByText('One comment');
+
+    // Exactly one row: the comment. The issue's own `opened` event (#82) exists
+    // in the underlying data but is filtered from the rail (Variant A, #83) since
+    // it would just repeat the description's own "<author> opened <when>" line.
+    const rows = within(
+      screen.getByRole('region', { name: 'Activity' }),
+    ).getAllByRole('listitem');
+    expect(rows).toHaveLength(1);
   });
 
   test('the description editor toggles between Edit and Preview markdown', async () => {

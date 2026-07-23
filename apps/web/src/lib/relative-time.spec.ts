@@ -12,11 +12,11 @@ describe('formatOpened', () => {
     expect(formatOpened('2026-07-21T09:00:00Z', now)).toBe('3 hours ago');
   });
 
-  test('earlier this year -> "on <day month>", no year', () => {
-    expect(formatOpened('2026-07-19T09:00:00Z', now)).toBe('on 19 Jul');
+  test('earlier this year -> "<day month>", no year', () => {
+    expect(formatOpened('2026-07-19T09:00:00Z', now)).toBe('19 Jul');
   });
 
-  test('a prior year -> "on <day month year>"', () => {
-    expect(formatOpened('2025-07-22T09:00:00Z', now)).toBe('on 22 Jul 2025');
+  test('a prior year -> "<day month year>"', () => {
+    expect(formatOpened('2025-07-22T09:00:00Z', now)).toBe('22 Jul 2025');
   });
 });
