@@ -12,6 +12,7 @@ import {
   toIssue,
 } from '../db/queries';
 import { actors, issues } from '../db/schema';
+import { newlyMentionedTargets } from '../domain/mentions';
 import { rankAfter } from '../domain/rank';
 import type { EventBus } from '../events/bus';
 import { withEvents } from '../events/with-events';
@@ -270,7 +271,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
-      if (!findIssue(db, project.id, number)) {
+      const before = findIssue(db, project.id, number);
+      if (!before) {
         return c.json({ error: 'Issue not found' }, 404);
       }
       const patch = c.req.valid('json');
@@ -286,6 +288,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
           return c.json({ error: `No actor with id ${patch.assigneeId}` }, 400);
         }
       }
+      const actorId = c.get('actorId');
       const now = new Date().toISOString();
       // claimedAt tracks when the CURRENT assignee was set, whatever the write
       // path (claim endpoints or this PATCH), so lease staleness (routes/
@@ -294,12 +297,88 @@ export function issuesRouter(db: Db, bus: EventBus) {
         patch.assigneeId === undefined
           ? {}
           : { claimedAt: patch.assigneeId === null ? null : now };
-      const row = db
-        .update(issues)
-        .set({ ...patch, ...claimPatch, updatedAt: now })
-        .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
-        .returning()
-        .get();
+      // The mutation and its events run in one transaction (#76/#82/#84/#87):
+      // diff the before-row against the `.returning()` after-row field-by-field,
+      // emitting one event per genuinely-changed event-worthy field (a field
+      // sent equal to its current value, or never sent at all, leaves before
+      // === after, so it emits nothing). `body` and `rank` are never diffed as
+      // their own event, but a changed `body` still triggers the mention scan
+      // below - fired = the targets newly resolved from the new body but not
+      // the old one, so editing in a fresh reference fires once and removing
+      // one retracts nothing (there is no retraction event type).
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const updated = tx
+            .update(issues)
+            .set({ ...patch, ...claimPatch, updatedAt: now })
+            .where(
+              and(eq(issues.projectId, project.id), eq(issues.number, number)),
+            )
+            .returning()
+            .get();
+          if (before.title !== updated.title) {
+            emit({
+              issueId: updated.id,
+              type: 'renamed',
+              data: { from: before.title, to: updated.title },
+            });
+          }
+          if (before.type !== updated.type) {
+            emit({
+              issueId: updated.id,
+              type: 'typed',
+              data: { from: before.type, to: updated.type },
+            });
+          }
+          if (before.state !== updated.state) {
+            emit({
+              issueId: updated.id,
+              type: updated.state === 'closed' ? 'closed' : 'reopened',
+              data: {},
+            });
+          }
+          if (before.assigneeId !== updated.assigneeId) {
+            if (updated.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'assigned',
+                data: { assigneeActorId: updated.assigneeId },
+              });
+            } else if (before.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'unassigned',
+                data: { assigneeActorId: before.assigneeId },
+              });
+            }
+          }
+          if (patch.body !== undefined) {
+            const targets = newlyMentionedTargets(
+              tx,
+              project.id,
+              project.key,
+              before.id,
+              before.body,
+              patch.body,
+            );
+            for (const targetId of targets) {
+              emit({
+                issueId: targetId,
+                type: 'mentioned',
+                data: {
+                  projectKey: project.key,
+                  number: updated.number,
+                  title: updated.title,
+                },
+              });
+            }
+          }
+          return updated;
+        },
+      );
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404);
       }

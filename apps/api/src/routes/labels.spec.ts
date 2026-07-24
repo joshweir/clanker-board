@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { beforeEach, describe, expect, test } from 'vitest';
+import { EventSchema } from '../domain/events';
 import { testApp } from '../test/app';
 import { nextEventOfType, readEvents } from '../test/sse';
 import { IssueSchema } from './issues';
@@ -8,9 +9,10 @@ import { LabelSchema } from './labels';
 // Seam 1: drive the real Hono app through app.request against a real in-memory
 // SQLite with migrations applied. No mocking of Drizzle, SQLite, or the bus.
 let app: ReturnType<typeof testApp>['app'];
+let actorId: number;
 
 beforeEach(() => {
-  ({ app } = testApp());
+  ({ app, actorId } = testApp());
 });
 
 const json = (body: unknown) => ({
@@ -56,6 +58,15 @@ const getIssue = async (slug: string, number: number) =>
   IssueSchema.parse(
     await (await app.request(`/api/projects/${slug}/issues/${number}`)).json(),
   );
+
+const listEvents = async (slug: string, number: number) =>
+  z
+    .array(EventSchema)
+    .parse(
+      await (
+        await app.request(`/api/projects/${slug}/issues/${number}/events`)
+      ).json(),
+    );
 
 describe('POST /api/projects/:slug/labels', () => {
   beforeEach(async () => {
@@ -220,6 +231,87 @@ describe('attach / detach labels to issues', () => {
 
   test('detach 404s for an unknown label', async () => {
     expect((await detach('demo', 1, 999)).status).toBe(404);
+  });
+});
+
+describe('labeled / unlabeled events (#85)', () => {
+  beforeEach(async () => {
+    await createProject('DEMO');
+    await createIssue('demo', 'Task');
+  });
+
+  test('attach emits `labeled` with a {labelId, name} snapshot, attributed to the acting actor', async () => {
+    const label = await parseLabel(await createLabel('demo', 'alpha'));
+    await attach('demo', 1, label.id);
+    const events = await listEvents('demo', 1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'labeled',
+        actorId,
+        data: { labelId: label.id, name: 'alpha' },
+      }),
+    );
+  });
+
+  test('detach emits `unlabeled` with a {labelId, name} snapshot', async () => {
+    const label = await parseLabel(await createLabel('demo', 'alpha'));
+    await attach('demo', 1, label.id);
+    await detach('demo', 1, label.id);
+    const events = await listEvents('demo', 1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'unlabeled',
+        data: { labelId: label.id, name: 'alpha' },
+      }),
+    );
+  });
+
+  test('a redundant attach (already attached) emits no `labeled` event', async () => {
+    const label = await parseLabel(await createLabel('demo', 'alpha'));
+    await attach('demo', 1, label.id);
+    await attach('demo', 1, label.id); // redundant
+    const events = await listEvents('demo', 1);
+    expect(events.filter((e) => e.type === 'labeled')).toHaveLength(1);
+  });
+
+  test('a redundant detach (not attached) emits no `unlabeled` event', async () => {
+    const label = await parseLabel(await createLabel('demo', 'alpha'));
+    await detach('demo', 1, label.id); // never attached
+    const events = await listEvents('demo', 1);
+    expect(events.filter((e) => e.type === 'unlabeled')).toHaveLength(0);
+  });
+
+  test('the frozen event name outlives a later rename of the label', async () => {
+    const label = await parseLabel(await createLabel('demo', 'old-name'));
+    await attach('demo', 1, label.id);
+    await app.request(`/api/projects/demo/labels/${label.id}`, {
+      method: 'PATCH',
+      ...json({ name: 'new-name' }),
+    });
+    const events = await listEvents('demo', 1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'labeled',
+        data: { labelId: label.id, name: 'old-name' },
+      }),
+    );
+  });
+
+  test('label create/rename/delete never emit an issue event themselves', async () => {
+    const label = await parseLabel(await createLabel('demo', 'temp'));
+    await attach('demo', 1, label.id);
+    await app.request(`/api/projects/demo/labels/${label.id}`, {
+      method: 'PATCH',
+      ...json({ name: 'renamed' }),
+    });
+    await app.request(`/api/projects/demo/labels/${label.id}`, {
+      method: 'DELETE',
+    });
+    const events = await listEvents('demo', 1);
+    // Only the `labeled` from the attach above - no event type reflects the
+    // label definition's own create/rename/delete (project-level, not an issue
+    // event); `issue.changed` re-publishes are a separate SSE stream, not this.
+    expect(events.map((e) => e.type)).toEqual(['opened', 'labeled']);
   });
 });
 

@@ -196,13 +196,18 @@ describe('issue modal', () => {
     await user.click(screen.getByRole('button', { name: 'Comment' }));
     await screen.findByText('One comment');
 
-    // Exactly one row: the comment. The issue's own `opened` event (#82) exists
-    // in the underlying data but is filtered from the rail (Variant A, #83) since
-    // it would just repeat the description's own "<author> opened <when>" line.
+    // The issue's own `opened` event (#82) exists in the underlying data but is
+    // filtered from the rail (Variant A, #83) since it would just repeat the
+    // description's own "<author> opened <when>" line. The seed's label attach
+    // (#85) is a genuine change, so it DOES render - the rail here is that
+    // `labeled` row plus the comment, never an `opened` row.
     const rows = within(
       screen.getByRole('region', { name: 'Activity' }),
     ).getAllByRole('listitem');
-    expect(rows).toHaveLength(1);
+    expect(rows.some((row) => row.textContent?.includes('opened'))).toBe(false);
+    expect(rows.some((row) => row.textContent?.includes('One comment'))).toBe(
+      true,
+    );
   });
 
   test('the description editor toggles between Edit and Preview markdown', async () => {

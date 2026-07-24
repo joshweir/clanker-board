@@ -47,6 +47,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@clanker/mentions':
+        specifier: workspace:*
+        version: link:../../packages/mentions
       '@hono/node-server':
         specifier: ^2.0.10
         version: 2.0.10(hono@4.12.30)

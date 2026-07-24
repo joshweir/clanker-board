@@ -4,6 +4,7 @@ import type { Db } from '../db/client';
 import { findIssue, findProjectBySlug, toIssue } from '../db/queries';
 import { actors, issues, labels } from '../db/schema';
 import type { EventBus } from '../events/bus';
+import { withEvents } from '../events/with-events';
 import type { ActorEnv } from '../middleware/actor';
 import { IssueSchema } from './issues';
 import { idParam, jsonBody, SlugParamSchema } from './openapi';
@@ -94,14 +95,35 @@ export function claimsRouter(db: Db, bus: EventBus) {
   // The single write path for both routes. Sync driver, single process: nothing
   // interleaves between the claimability check and this update, so the check-
   // then-set pair is atomic (same invariant the issue-numbering insert leans on).
+  //
+  // Claim / claim-next converge on the `assigned` event (#84), same as a
+  // PATCH-assignee: self-vs-other phrasing is derived at render time
+  // (event.actorId === assigneeActorId), never stored. A re-claim by the
+  // current holder (heartbeat renewal) leaves assigneeId unchanged, so it
+  // emits nothing - idempotency is this caller's job, per withEvents.
   const writeClaim = (row: IssueRow, actorId: number, projectKey: string) => {
     const now = new Date().toISOString();
-    const updated = db
-      .update(issues)
-      .set({ assigneeId: actorId, claimedAt: now, updatedAt: now })
-      .where(eq(issues.id, row.id))
-      .returning()
-      .get();
+    const updated = withEvents(
+      db,
+      bus,
+      { projectId: row.projectId, actorId, now },
+      (tx, emit) => {
+        const updatedRow = tx
+          .update(issues)
+          .set({ assigneeId: actorId, claimedAt: now, updatedAt: now })
+          .where(eq(issues.id, row.id))
+          .returning()
+          .get();
+        if (row.assigneeId !== actorId) {
+          emit({
+            issueId: updatedRow.id,
+            type: 'assigned',
+            data: { assigneeActorId: actorId },
+          });
+        }
+        return updatedRow;
+      },
+    );
     const issue = toIssue(db, updated, projectKey);
     bus.publishIssueChanged(updated.projectId, issue);
     return issue;
