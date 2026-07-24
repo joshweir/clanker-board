@@ -3,8 +3,11 @@ import { and, asc, eq, max } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import type { Db } from '../db/client';
 import {
+  blockersOf,
+  childrenOf,
   dependentsOf,
   findIssue,
+  findIssueById,
   findProjectBySlug,
   toIssue,
 } from '../db/queries';
@@ -320,15 +323,87 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
-      const deleted = db
-        .delete(issues)
-        .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
-        .returning()
-        .get();
+      const existing = findIssue(db, project.id, number);
+      if (!existing) {
+        return c.json({ error: 'Issue not found' }, 404);
+      }
+      // Read every relationship direction BEFORE the delete (#86): the FK cascade
+      // (parent_id -> set null, issue_blocked_by -> cascade) wipes these edges the
+      // instant the row goes, so the survivor list has to be captured up front.
+      const parent =
+        existing.parentId !== null
+          ? findIssueById(db, existing.parentId)
+          : undefined;
+      const children = childrenOf(db, existing.id);
+      const blockers = blockersOf(db, existing.id);
+      const dependents = dependentsOf(db, existing.id);
+      // The deleted issue's own {projectKey, number, title} is the counterpart
+      // snapshot on every synthesized survivor event - a snapshot, not a soft FK,
+      // is what survives the cascade (#86).
+      const counterpart = {
+        projectKey: project.key,
+        number: existing.number,
+        title: existing.title,
+      };
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      const deleted = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          if (parent) {
+            emit({
+              issueId: parent.id,
+              type: 'sub_issue_removed',
+              data: counterpart,
+            });
+          }
+          for (const child of children) {
+            emit({
+              issueId: child.id,
+              type: 'parent_removed',
+              data: counterpart,
+            });
+          }
+          for (const blocker of blockers) {
+            emit({
+              issueId: blocker.id,
+              type: 'blocking_removed',
+              data: counterpart,
+            });
+          }
+          for (const dependent of dependents) {
+            emit({
+              issueId: dependent.id,
+              type: 'blocked_by_removed',
+              data: counterpart,
+            });
+          }
+          // FK cascade drops the edges (and the deleted issue's own events) as
+          // part of this same statement; no `deleted` event type is ever stored.
+          return tx
+            .delete(issues)
+            .where(
+              and(eq(issues.projectId, project.id), eq(issues.number, number)),
+            )
+            .returning()
+            .get();
+        },
+      );
       if (!deleted) {
         return c.json({ error: 'Issue not found' }, 404);
       }
       bus.publishIssueDeleted(project.id, deleted.id, deleted.number);
+      // Only survivors whose derived blocked/ready can flip (the issues `existing`
+      // used to block) get re-published (#86), mirroring the state-change re-publish
+      // above.
+      for (const dependent of dependents) {
+        bus.publishIssueChanged(
+          project.id,
+          toIssue(db, dependent, project.key),
+        );
+      }
       return c.body(null, 204);
     });
 }

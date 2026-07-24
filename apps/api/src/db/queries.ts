@@ -166,3 +166,30 @@ export const findIssue = (db: Db, projectId: number, number: number) =>
     .from(issues)
     .where(and(eq(issues.projectId, projectId), eq(issues.number, number)))
     .get();
+
+// Look up a single issue by its internal id (as opposed to findIssue's per-project
+// number) - used where a caller only has a FK-style id in hand, e.g. resolving a
+// parent row for its own snapshot (#86).
+export const findIssueById = (db: Db, id: number) =>
+  db.select().from(issues).where(eq(issues.id, id)).get();
+
+// The direct children of a given issue (its parentId), read BEFORE a delete so the
+// delete-cascade survivor events (#86) know who to notify - the FK's own
+// ON DELETE SET NULL fires as part of the same delete statement, after this read.
+export const childrenOf = (db: Db, parentId: number): IssueRow[] =>
+  db
+    .select(getTableColumns(issues))
+    .from(issues)
+    .where(eq(issues.parentId, parentId))
+    .all();
+
+// The issues that block a given issue - the reverse of dependentsOf. Read BEFORE a
+// delete so the delete-cascade survivor events (#86) can tell each blocker its
+// dependent is gone (blocking_removed), before the edge itself cascades away.
+export const blockersOf = (db: Db, issueId: number): IssueRow[] =>
+  db
+    .select(getTableColumns(issues))
+    .from(issues)
+    .innerJoin(issueBlockedBy, eq(issueBlockedBy.blockerId, issues.id))
+    .where(eq(issueBlockedBy.issueId, issueId))
+    .all();

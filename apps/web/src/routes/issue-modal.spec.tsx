@@ -258,8 +258,13 @@ describe('issue modal', () => {
 
     // Declare DEMO-2 as a blocker; the chip appears live off issue.changed - the
     // feedback the status word alone could not give - and the status flips.
+    // The chip's span carries a `title` attribute the Timeline's counterpart
+    // link (#86) does not - scope to it, since both now render the text
+    // "DEMO-2" once the relationship event lands in the activity rail too.
     await user.selectOptions(modal.getByLabelText('Add a blocker'), '2');
-    expect(await modal.findByText('DEMO-2')).toBeDefined();
+    expect(
+      await modal.findByText('DEMO-2', { selector: 'span[title]' }),
+    ).toBeDefined();
     await modal.findByText('Blocked');
 
     // The chip's × removes the edge; both the chip and the Blocked status clear.
@@ -267,7 +272,9 @@ describe('issue modal', () => {
       modal.getByRole('button', { name: 'Remove blocker DEMO-2' }),
     );
     await waitFor(() => {
-      expect(modal.queryByText('DEMO-2')).toBeNull();
+      expect(
+        modal.queryByText('DEMO-2', { selector: 'span[title]' }),
+      ).toBeNull();
     });
     await modal.findByText('Ready');
   });
@@ -296,6 +303,74 @@ describe('issue modal', () => {
     // The look-alike stays plain prose - never a link.
     expect(screen.queryByRole('link', { name: /SOC-2/ })).toBeNull();
     expect(screen.getByText(/look-alike SOC-2/)).toBeDefined();
+  });
+
+  test('a relationship event renders its counterpart as a full link under the header (#86)', async () => {
+    const { router, user } = await renderApp(async (client) => {
+      await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } });
+      await createIssue(client, 'Wire the board');
+      await createIssue(client, 'Ship the API');
+    });
+    await router.navigate({ to: '/projects/$slug', params: { slug } });
+    await user.click(await screen.findByText('Wire the board'));
+    await screen.findByLabelText('Edit title');
+    const modal = within(screen.getByRole('dialog'));
+    const activity = within(screen.getByRole('region', { name: 'Activity' }));
+
+    await user.selectOptions(modal.getByLabelText('Parent'), '2');
+    await activity.findByText(/added a parent/);
+
+    // The header line names the event only - the counterpart lives in its own
+    // list below (never inline), one continuous-underline link with the status
+    // dot, title, and muted key all inside it.
+    const header = activity
+      .getByText(/added a parent/)
+      .closest('.timeline-line');
+    expect(header?.textContent).not.toMatch(/Ship the API/);
+    const link = await activity.findByRole('link', {
+      name: /Ship the API.*DEMO-2/,
+    });
+    expect(link.closest('.timeline-counterparts')).not.toBeNull();
+    expect(link.getAttribute('href')).toBe('/projects/demo/issues/2');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener');
+    expect(link.querySelector('.counterpart-dot')).not.toBeNull();
+  });
+
+  test('adjacent same-type relationship events collapse into one grouped row (#86)', async () => {
+    const { router, user } = await renderApp(async (client) => {
+      await client.api.projects.$post({ json: { name: 'Demo', key: 'DEMO' } });
+      await createIssue(client, 'Wire the board');
+      await createIssue(client, 'Ship the API');
+      await createIssue(client, 'Write the docs');
+    });
+    await router.navigate({ to: '/projects/$slug', params: { slug } });
+    await user.click(await screen.findByText('Wire the board'));
+    await screen.findByLabelText('Edit title');
+    const modal = within(screen.getByRole('dialog'));
+    const activity = within(screen.getByRole('region', { name: 'Activity' }));
+
+    // Two blockers declared back to back by the same actor: one grouped row,
+    // not two, plural-worded, each counterpart still linked below (#86 "GitHub
+    // adjacency" grouping).
+    await user.selectOptions(modal.getByLabelText('Add a blocker'), '2');
+    await activity.findByText(/marked this as blocked/);
+    await user.selectOptions(modal.getByLabelText('Add a blocker'), '3');
+    await activity.findByText(/blocked by 2 issues/);
+
+    const rows = activity.getAllByText(/blocked by 2 issues/);
+    expect(rows).toHaveLength(1);
+    expect(
+      await activity.findByRole('link', { name: /Ship the API.*DEMO-2/ }),
+    ).toBeDefined();
+    expect(
+      await activity.findByRole('link', { name: /Write the docs.*DEMO-3/ }),
+    ).toBeDefined();
+    // The blocking family swaps the plain dot for the octagon+minus icon.
+    const link = await activity.findByRole('link', {
+      name: /Ship the API.*DEMO-2/,
+    });
+    expect(link.querySelector('.counterpart-blocked-icon')).not.toBeNull();
   });
 
   test('the header New issue button creates via the same modal', async () => {
