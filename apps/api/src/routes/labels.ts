@@ -10,6 +10,8 @@ import {
 } from '../db/queries';
 import { issueLabels, issues, labels } from '../db/schema';
 import type { EventBus } from '../events/bus';
+import { withEvents } from '../events/with-events';
+import type { ActorEnv } from '../middleware/actor';
 import { idParam, jsonBody, SlugParamSchema } from './openapi';
 import { ErrorSchema } from './projects';
 
@@ -78,6 +80,18 @@ const issuesWithLabel = (
     .innerJoin(issueLabels, eq(issueLabels.issueId, issues.id))
     .where(eq(issueLabels.labelId, labelId))
     .all();
+
+// Whether an issue already carries a label - the genuine-change check attach/
+// detach use to decide whether to emit `labeled`/`unlabeled` (#85): a redundant
+// attach/detach must emit nothing, so this is read BEFORE the mutation runs.
+const isAttached = (db: Db, issueId: number, labelId: number): boolean =>
+  db
+    .select()
+    .from(issueLabels)
+    .where(
+      and(eq(issueLabels.issueId, issueId), eq(issueLabels.labelId, labelId)),
+    )
+    .get() !== undefined;
 
 const listLabelsRoute = createRoute({
   method: 'get',
@@ -169,7 +183,7 @@ const detachLabelRoute = createRoute({
 });
 
 export function labelsRouter(db: Db, bus: EventBus) {
-  return new OpenAPIHono({
+  return new OpenAPIHono<ActorEnv>({
     // Validation failures surface as 400 + a useful message (trust boundary).
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -270,14 +284,36 @@ export function labelsRouter(db: Db, bus: EventBus) {
       if (!issue) {
         return c.json({ error: 'Issue not found' }, 404);
       }
-      if (!findLabel(db, project.id, labelId)) {
+      const label = findLabel(db, project.id, labelId);
+      if (!label) {
         return c.json({ error: 'Label not found' }, 404);
       }
-      // Composite PK makes re-attaching the same label a no-op (idempotent).
-      db.insert(issueLabels)
-        .values({ issueId: issue.id, labelId })
-        .onConflictDoNothing()
-        .run();
+      // Read genuine-change BEFORE the mutation (#85): a redundant attach must
+      // emit nothing, so this decides whether `emit` below even runs.
+      const alreadyAttached = isAttached(db, issue.id, labelId);
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          // Composite PK makes re-attaching the same label a no-op (idempotent).
+          tx.insert(issueLabels)
+            .values({ issueId: issue.id, labelId })
+            .onConflictDoNothing()
+            .run();
+          if (!alreadyAttached) {
+            // `name` is frozen render text (#85): a later rename/delete of this
+            // label never rewrites this event's history.
+            emit({
+              issueId: issue.id,
+              type: 'labeled',
+              data: { labelId, name: label.name },
+            });
+          }
+        },
+      );
       const attached = labelsForIssue(db, issue.id);
       bus.publishIssueChanged(project.id, toIssue(db, issue, project.key));
       return c.json(attached, 200);
@@ -292,17 +328,35 @@ export function labelsRouter(db: Db, bus: EventBus) {
       if (!issue) {
         return c.json({ error: 'Issue not found' }, 404);
       }
-      if (!findLabel(db, project.id, labelId)) {
+      const label = findLabel(db, project.id, labelId);
+      if (!label) {
         return c.json({ error: 'Label not found' }, 404);
       }
-      db.delete(issueLabels)
-        .where(
-          and(
-            eq(issueLabels.issueId, issue.id),
-            eq(issueLabels.labelId, labelId),
-          ),
-        )
-        .run();
+      const wasAttached = isAttached(db, issue.id, labelId);
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          tx.delete(issueLabels)
+            .where(
+              and(
+                eq(issueLabels.issueId, issue.id),
+                eq(issueLabels.labelId, labelId),
+              ),
+            )
+            .run();
+          if (wasAttached) {
+            emit({
+              issueId: issue.id,
+              type: 'unlabeled',
+              data: { labelId, name: label.name },
+            });
+          }
+        },
+      );
       const remaining = labelsForIssue(db, issue.id);
       bus.publishIssueChanged(project.id, toIssue(db, issue, project.key));
       return c.json(remaining, 200);

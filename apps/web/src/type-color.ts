@@ -44,3 +44,12 @@ export function typeColor(index: number): TypeColor {
 export function typeColors(types: string[]): Map<string, TypeColor> {
   return new Map(types.map((type, i) => [type, typeColor(i)]));
 }
+
+// A label's chip color (#85), keyed on its id rather than its position: color is
+// never stored (labels have no color column), so the timeline derives it purely
+// from labelId - stable across a rename (id unchanged) and even across a delete
+// (a frozen `labeled`/`unlabeled` event snapshot still has the id to re-derive
+// from). Reuses typeColor's palette-walk/luminance logic unchanged.
+export function colorFor(labelId: number): TypeColor {
+  return typeColor(labelId);
+}

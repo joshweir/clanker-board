@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Actor, Comment, IssueEvent } from '../api';
 import { formatOpened } from '../lib/relative-time';
+import { colorFor } from '../type-color';
 import { ActorName } from './actor-name';
 import { Markdown } from './markdown';
 import type { MentionableIssue } from './remark-mentions';
@@ -15,9 +16,9 @@ import type { MentionableIssue } from './remark-mentions';
 // dropped from the rail below, because the description card above already
 // reads "<author> opened <when>"). #84 adds real phrasing/icons for the
 // lifecycle (`closed`/`reopened`), field (`renamed`/`typed`) and involvement
-// (`assigned`/`unassigned`) shapes; labels (#85), relationships (#86) and
-// mentions (#87) still fall through `eventLine`'s placeholder - the merge,
-// ordering and rail layout never change.
+// (`assigned`/`unassigned`) shapes; #85 adds the label chip wording (`labeled`/
+// `unlabeled`); relationships (#86) and mentions (#87) still fall through
+// `eventLine`'s placeholder - the merge, ordering and rail layout never change.
 
 type TimelineNode =
   | { kind: 'event'; key: string; event: IssueEvent }
@@ -52,11 +53,26 @@ export function mergeTimeline(
   });
 }
 
+// A label's chip, colored via `colorFor(labelId)` (#85) - color is never stored
+// (labels have no color column), so it is re-derived here from the frozen
+// {labelId, name} snapshot on the event, not read live off the label.
+function labelChip({ labelId, name }: { labelId: number; name: string }) {
+  const { bg, fg } = colorFor(labelId);
+  return (
+    <span
+      className="label-chip"
+      style={{ backgroundColor: bg, color: fg, borderColor: bg }}
+    >
+      {name}
+    </span>
+  );
+}
+
 // The self-contained one-liner phrasing for an event type, GitHub-style ("<actor>
 // <predicate> <time>"). `opened` never actually reaches here (filtered below,
-// kept for completeness). Lifecycle/field/involvement (#84) render real wording
-// here; labels (#85), relationships (#86) and mentions (#87) are still a bare
-// placeholder until their own ticket lands.
+// kept for completeness). Lifecycle/field/involvement (#84) and labels (#85)
+// render real wording here; relationships (#86) and mentions (#87) are still a
+// bare placeholder until their own ticket lands.
 function eventLine(event: IssueEvent, actors: Actor[]): ReactNode {
   switch (event.type) {
     case 'opened':
@@ -102,6 +118,10 @@ function eventLine(event: IssueEvent, actors: Actor[]): ReactNode {
           <ActorName actorId={event.data.assigneeActorId} actors={actors} />
         </>
       );
+    case 'labeled':
+      return <>added {labelChip(event.data)}</>;
+    case 'unlabeled':
+      return <>removed {labelChip(event.data)}</>;
     default:
       return event.type;
   }
