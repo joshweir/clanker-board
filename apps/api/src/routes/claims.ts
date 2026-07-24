@@ -4,6 +4,8 @@ import type { Db } from '../db/client';
 import { findIssue, findProjectBySlug, toIssue } from '../db/queries';
 import { actors, issues, labels } from '../db/schema';
 import type { EventBus } from '../events/bus';
+import { withEvents } from '../events/with-events';
+import type { ActorEnv } from '../middleware/actor';
 import { IssueSchema } from './issues';
 import { idParam, jsonBody, SlugParamSchema } from './openapi';
 import { ErrorSchema } from './projects';
@@ -38,17 +40,22 @@ const isClaimable = (db: Db, row: IssueRow, actorId: number): boolean => {
   return Date.now() - Date.parse(row.claimedAt) > claimTtlMs();
 };
 
-const ClaimSchema = z
-  .object({ actorId: z.number().int().positive().openapi({ example: 1 }) })
-  .openapi('Claim');
-
 // Optional filters narrow what claim-next may pick: a label name (case-
 // insensitive), a freeform type, and/or a parent issue (its per-project number).
-const ClaimNextSchema = ClaimSchema.extend({
-  label: z.string().min(1).optional().openapi({ example: 'ready-for-agent' }),
-  type: z.string().min(1).optional().openapi({ example: 'task' }),
-  parentNumber: z.number().int().positive().optional().openapi({ example: 1 }),
-}).openapi('ClaimNext');
+// The claimant is the acting actor (X-Actor-Id), never a body field - a claim is
+// always self-referential (#9, #81).
+const ClaimNextSchema = z
+  .object({
+    label: z.string().min(1).optional().openapi({ example: 'ready-for-agent' }),
+    type: z.string().min(1).optional().openapi({ example: 'task' }),
+    parentNumber: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .openapi({ example: 1 }),
+  })
+  .openapi('ClaimNext');
 
 const IssueParamSchema = SlugParamSchema.extend({ number: idParam('number') });
 
@@ -56,17 +63,10 @@ const claimIssueRoute = createRoute({
   method: 'post',
   path: '/projects/{slug}/issues/{number}/claim',
   summary:
-    'Atomically claim an issue (re-claim by the holder renews the lease)',
-  request: {
-    params: IssueParamSchema,
-    body: {
-      content: { 'application/json': { schema: ClaimSchema } },
-      required: true,
-    },
-  },
+    'Atomically claim an issue for the acting actor (re-claim by the holder renews the lease)',
+  request: { params: IssueParamSchema },
   responses: {
     200: jsonBody(IssueSchema, 'The claimed issue'),
-    400: jsonBody(ErrorSchema, 'Validation failure or unknown actor'),
     404: jsonBody(ErrorSchema, 'No such project or issue'),
     409: jsonBody(ErrorSchema, 'Issue is closed or held by someone else'),
   },
@@ -76,7 +76,7 @@ const claimNextRoute = createRoute({
   method: 'post',
   path: '/projects/{slug}/issues/claim-next',
   summary:
-    'Atomically claim the first ready issue (open, unheld, all blockers closed)',
+    'Atomically claim the first ready issue for the acting actor (open, unheld, all blockers closed)',
   request: {
     params: SlugParamSchema,
     body: {
@@ -86,32 +86,50 @@ const claimNextRoute = createRoute({
   },
   responses: {
     200: jsonBody(IssueSchema, 'The claimed issue'),
-    400: jsonBody(ErrorSchema, 'Validation failure or unknown actor/filter'),
+    400: jsonBody(ErrorSchema, 'Validation failure or unknown filter'),
     404: jsonBody(ErrorSchema, 'No such project, or no ready issue matches'),
   },
 });
 
 export function claimsRouter(db: Db, bus: EventBus) {
-  const findActor = (id: number) =>
-    db.select().from(actors).where(eq(actors.id, id)).get();
-
   // The single write path for both routes. Sync driver, single process: nothing
   // interleaves between the claimability check and this update, so the check-
   // then-set pair is atomic (same invariant the issue-numbering insert leans on).
+  //
+  // Claim / claim-next converge on the `assigned` event (#84), same as a
+  // PATCH-assignee: self-vs-other phrasing is derived at render time
+  // (event.actorId === assigneeActorId), never stored. A re-claim by the
+  // current holder (heartbeat renewal) leaves assigneeId unchanged, so it
+  // emits nothing - idempotency is this caller's job, per withEvents.
   const writeClaim = (row: IssueRow, actorId: number, projectKey: string) => {
     const now = new Date().toISOString();
-    const updated = db
-      .update(issues)
-      .set({ assigneeId: actorId, claimedAt: now, updatedAt: now })
-      .where(eq(issues.id, row.id))
-      .returning()
-      .get();
+    const updated = withEvents(
+      db,
+      bus,
+      { projectId: row.projectId, actorId, now },
+      (tx, emit) => {
+        const updatedRow = tx
+          .update(issues)
+          .set({ assigneeId: actorId, claimedAt: now, updatedAt: now })
+          .where(eq(issues.id, row.id))
+          .returning()
+          .get();
+        if (row.assigneeId !== actorId) {
+          emit({
+            issueId: updatedRow.id,
+            type: 'assigned',
+            data: { assigneeActorId: actorId },
+          });
+        }
+        return updatedRow;
+      },
+    );
     const issue = toIssue(db, updated, projectKey);
     bus.publishIssueChanged(updated.projectId, issue);
     return issue;
   };
 
-  return new OpenAPIHono({
+  return new OpenAPIHono<ActorEnv>({
     // Validation failures surface as 400 + a useful message (trust boundary).
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -121,7 +139,8 @@ export function claimsRouter(db: Db, bus: EventBus) {
   })
     .openapi(claimIssueRoute, (c) => {
       const { slug, number } = c.req.valid('param');
-      const { actorId } = c.req.valid('json');
+      // The claimant is the acting actor (requireActor already validated it).
+      const actorId = c.get('actorId');
       const project = findProjectBySlug(db, slug);
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
@@ -129,9 +148,6 @@ export function claimsRouter(db: Db, bus: EventBus) {
       const row = findIssue(db, project.id, number);
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404);
-      }
-      if (!findActor(actorId)) {
-        return c.json({ error: `No actor with id ${actorId}` }, 400);
       }
       if (row.state === 'closed') {
         return c.json({ error: 'Issue is closed' }, 409);
@@ -146,13 +162,12 @@ export function claimsRouter(db: Db, bus: EventBus) {
     })
     .openapi(claimNextRoute, (c) => {
       const { slug } = c.req.valid('param');
-      const { actorId, label, type, parentNumber } = c.req.valid('json');
+      const { label, type, parentNumber } = c.req.valid('json');
+      // The claimant is the acting actor (requireActor already validated it).
+      const actorId = c.get('actorId');
       const project = findProjectBySlug(db, slug);
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
-      }
-      if (!findActor(actorId)) {
-        return c.json({ error: `No actor with id ${actorId}` }, 400);
       }
       let parentId: number | undefined;
       if (parentNumber !== undefined) {

@@ -1,9 +1,16 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { findIssue, findProjectBySlug, toIssue } from '../db/queries';
+import {
+  findIssue,
+  findIssueById,
+  findProjectBySlug,
+  toIssue,
+} from '../db/queries';
 import { issueBlockedBy, issues } from '../db/schema';
 import type { EventBus } from '../events/bus';
+import { withEvents } from '../events/with-events';
+import type { ActorEnv } from '../middleware/actor';
 import { IssueSchema } from './issues';
 import { idParam, jsonBody, SlugParamSchema } from './openapi';
 import { ErrorSchema } from './projects';
@@ -141,7 +148,7 @@ const unblockRoute = createRoute({
 });
 
 export function relationshipsRouter(db: Db, bus: EventBus) {
-  return new OpenAPIHono({
+  return new OpenAPIHono<ActorEnv>({
     // Validation failures surface as 400 + a useful message (trust boundary).
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -178,12 +185,70 @@ export function relationshipsRouter(db: Db, bus: EventBus) {
           409,
         );
       }
-      const row = db
-        .update(issues)
-        .set({ parentId: parent.id, updatedAt: new Date().toISOString() })
-        .where(eq(issues.id, issue.id))
-        .returning()
-        .get();
+      // Re-declaring the SAME parent is a no-op for events (mirrors block's
+      // onConflictDoNothing idempotency, #86) - read the previous parent (if any)
+      // before the write so a genuine reparent can emit its `_removed` pair too.
+      const previousParentId = issue.parentId;
+      const previousParent =
+        previousParentId !== null && previousParentId !== parent.id
+          ? findIssueById(db, previousParentId)
+          : undefined;
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const updated = tx
+            .update(issues)
+            .set({ parentId: parent.id, updatedAt: now })
+            .where(eq(issues.id, issue.id))
+            .returning()
+            .get();
+          if (previousParentId !== parent.id) {
+            if (previousParent) {
+              emit({
+                issueId: issue.id,
+                type: 'parent_removed',
+                data: {
+                  projectKey: project.key,
+                  number: previousParent.number,
+                  title: previousParent.title,
+                },
+              });
+              emit({
+                issueId: previousParent.id,
+                type: 'sub_issue_removed',
+                data: {
+                  projectKey: project.key,
+                  number: issue.number,
+                  title: issue.title,
+                },
+              });
+            }
+            emit({
+              issueId: issue.id,
+              type: 'parent_added',
+              data: {
+                projectKey: project.key,
+                number: parent.number,
+                title: parent.title,
+              },
+            });
+            emit({
+              issueId: parent.id,
+              type: 'sub_issue_added',
+              data: {
+                projectKey: project.key,
+                number: issue.number,
+                title: issue.title,
+              },
+            });
+          }
+          return updated;
+        },
+      );
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404);
       }
@@ -201,12 +266,45 @@ export function relationshipsRouter(db: Db, bus: EventBus) {
       if (!issue) {
         return c.json({ error: 'Issue not found' }, 404);
       }
-      const row = db
-        .update(issues)
-        .set({ parentId: null, updatedAt: new Date().toISOString() })
-        .where(eq(issues.id, issue.id))
-        .returning()
-        .get();
+      // No parent set is already a no-op (existing test); emits nothing (#86).
+      const previousParent =
+        issue.parentId !== null ? findIssueById(db, issue.parentId) : undefined;
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const updated = tx
+            .update(issues)
+            .set({ parentId: null, updatedAt: now })
+            .where(eq(issues.id, issue.id))
+            .returning()
+            .get();
+          if (previousParent) {
+            emit({
+              issueId: issue.id,
+              type: 'parent_removed',
+              data: {
+                projectKey: project.key,
+                number: previousParent.number,
+                title: previousParent.title,
+              },
+            });
+            emit({
+              issueId: previousParent.id,
+              type: 'sub_issue_removed',
+              data: {
+                projectKey: project.key,
+                number: issue.number,
+                title: issue.title,
+              },
+            });
+          }
+          return updated;
+        },
+      );
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404);
       }
@@ -239,11 +337,44 @@ export function relationshipsRouter(db: Db, bus: EventBus) {
           409,
         );
       }
-      // Composite PK makes re-declaring the same edge a no-op (idempotent).
-      db.insert(issueBlockedBy)
-        .values({ issueId: issue.id, blockerId: blocker.id })
-        .onConflictDoNothing()
-        .run();
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          // Composite PK makes re-declaring the same edge a no-op (idempotent);
+          // `.returning()` on an ON CONFLICT DO NOTHING only yields the rows that
+          // were actually inserted, so an empty array IS the no-op signal (#86).
+          const inserted = tx
+            .insert(issueBlockedBy)
+            .values({ issueId: issue.id, blockerId: blocker.id })
+            .onConflictDoNothing()
+            .returning()
+            .all();
+          if (inserted.length > 0) {
+            emit({
+              issueId: issue.id,
+              type: 'blocked_by_added',
+              data: {
+                projectKey: project.key,
+                number: blocker.number,
+                title: blocker.title,
+              },
+            });
+            emit({
+              issueId: blocker.id,
+              type: 'blocking_added',
+              data: {
+                projectKey: project.key,
+                number: issue.number,
+                title: issue.title,
+              },
+            });
+          }
+        },
+      );
       // toIssue re-derives blocked/ready from the freshly-written edge.
       const snapshot = toIssue(db, issue, project.key);
       bus.publishIssueChanged(project.id, snapshot);
@@ -263,14 +394,46 @@ export function relationshipsRouter(db: Db, bus: EventBus) {
       if (!blocker) {
         return c.json({ error: 'Blocker issue not found' }, 404);
       }
-      db.delete(issueBlockedBy)
-        .where(
-          and(
-            eq(issueBlockedBy.issueId, issue.id),
-            eq(issueBlockedBy.blockerId, blocker.id),
-          ),
-        )
-        .run();
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          // A zero-row delete (the edge was never declared) emits nothing (#86).
+          const removed = tx
+            .delete(issueBlockedBy)
+            .where(
+              and(
+                eq(issueBlockedBy.issueId, issue.id),
+                eq(issueBlockedBy.blockerId, blocker.id),
+              ),
+            )
+            .returning()
+            .all();
+          if (removed.length > 0) {
+            emit({
+              issueId: issue.id,
+              type: 'blocked_by_removed',
+              data: {
+                projectKey: project.key,
+                number: blocker.number,
+                title: blocker.title,
+              },
+            });
+            emit({
+              issueId: blocker.id,
+              type: 'blocking_removed',
+              data: {
+                projectKey: project.key,
+                number: issue.number,
+                title: issue.title,
+              },
+            });
+          }
+        },
+      );
       const snapshot = toIssue(db, issue, project.key);
       bus.publishIssueChanged(project.id, snapshot);
       return c.json(snapshot, 200);

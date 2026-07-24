@@ -3,14 +3,20 @@ import { and, asc, eq, max } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import type { Db } from '../db/client';
 import {
+  blockersOf,
+  childrenOf,
   dependentsOf,
   findIssue,
+  findIssueById,
   findProjectBySlug,
   toIssue,
 } from '../db/queries';
 import { actors, issues } from '../db/schema';
+import { newlyMentionedTargets } from '../domain/mentions';
 import { rankAfter } from '../domain/rank';
 import type { EventBus } from '../events/bus';
+import { withEvents } from '../events/with-events';
+import type { ActorEnv } from '../middleware/actor';
 import { LabelSchema } from './labels';
 import { idParam, jsonBody, SlugParamSchema } from './openapi';
 import { ErrorSchema } from './projects';
@@ -154,7 +160,7 @@ const deleteIssueRoute = createRoute({
 });
 
 export function issuesRouter(db: Db, bus: EventBus) {
-  return new OpenAPIHono({
+  return new OpenAPIHono<ActorEnv>({
     // Validation failures surface as 400 + a useful message (trust boundary).
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -211,18 +217,37 @@ export function issuesRouter(db: Db, bus: EventBus) {
         .get();
       const number = (agg?.maxNumber ?? 0) + 1;
       const rank = rankAfter(agg?.maxRank ?? null);
-      const row = db
-        .insert(issues)
-        .values({
-          projectId: project.id,
-          number,
-          title,
-          type,
-          body: body ?? '',
-          rank,
-        })
-        .returning()
-        .get();
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      // The mutation and its `opened` event insert run in one transaction
+      // (#76/#82): a rolled-back create never leaves a phantom event, and the
+      // event.created broadcast fires only once the create has committed.
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const created = tx
+            .insert(issues)
+            .values({
+              projectId: project.id,
+              number,
+              title,
+              type,
+              body: body ?? '',
+              rank,
+              authorId: actorId,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .returning()
+            .get();
+          // Create always emits `opened` (actor = context actor = new authorId,
+          // data: {}) - the one event this ticket (#82) actually fires.
+          emit({ issueId: created.id, type: 'opened', data: {} });
+          return created;
+        },
+      );
       // A brand-new issue has no labels, no parent, and no blockers (ready).
       const issue = toIssue(db, row, project.key);
       bus.publishIssueChanged(project.id, issue);
@@ -246,7 +271,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
-      if (!findIssue(db, project.id, number)) {
+      const before = findIssue(db, project.id, number);
+      if (!before) {
         return c.json({ error: 'Issue not found' }, 404);
       }
       const patch = c.req.valid('json');
@@ -262,6 +288,7 @@ export function issuesRouter(db: Db, bus: EventBus) {
           return c.json({ error: `No actor with id ${patch.assigneeId}` }, 400);
         }
       }
+      const actorId = c.get('actorId');
       const now = new Date().toISOString();
       // claimedAt tracks when the CURRENT assignee was set, whatever the write
       // path (claim endpoints or this PATCH), so lease staleness (routes/
@@ -270,12 +297,88 @@ export function issuesRouter(db: Db, bus: EventBus) {
         patch.assigneeId === undefined
           ? {}
           : { claimedAt: patch.assigneeId === null ? null : now };
-      const row = db
-        .update(issues)
-        .set({ ...patch, ...claimPatch, updatedAt: now })
-        .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
-        .returning()
-        .get();
+      // The mutation and its events run in one transaction (#76/#82/#84/#87):
+      // diff the before-row against the `.returning()` after-row field-by-field,
+      // emitting one event per genuinely-changed event-worthy field (a field
+      // sent equal to its current value, or never sent at all, leaves before
+      // === after, so it emits nothing). `body` and `rank` are never diffed as
+      // their own event, but a changed `body` still triggers the mention scan
+      // below - fired = the targets newly resolved from the new body but not
+      // the old one, so editing in a fresh reference fires once and removing
+      // one retracts nothing (there is no retraction event type).
+      const row = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          const updated = tx
+            .update(issues)
+            .set({ ...patch, ...claimPatch, updatedAt: now })
+            .where(
+              and(eq(issues.projectId, project.id), eq(issues.number, number)),
+            )
+            .returning()
+            .get();
+          if (before.title !== updated.title) {
+            emit({
+              issueId: updated.id,
+              type: 'renamed',
+              data: { from: before.title, to: updated.title },
+            });
+          }
+          if (before.type !== updated.type) {
+            emit({
+              issueId: updated.id,
+              type: 'typed',
+              data: { from: before.type, to: updated.type },
+            });
+          }
+          if (before.state !== updated.state) {
+            emit({
+              issueId: updated.id,
+              type: updated.state === 'closed' ? 'closed' : 'reopened',
+              data: {},
+            });
+          }
+          if (before.assigneeId !== updated.assigneeId) {
+            if (updated.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'assigned',
+                data: { assigneeActorId: updated.assigneeId },
+              });
+            } else if (before.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'unassigned',
+                data: { assigneeActorId: before.assigneeId },
+              });
+            }
+          }
+          if (patch.body !== undefined) {
+            const targets = newlyMentionedTargets(
+              tx,
+              project.id,
+              project.key,
+              before.id,
+              before.body,
+              patch.body,
+            );
+            for (const targetId of targets) {
+              emit({
+                issueId: targetId,
+                type: 'mentioned',
+                data: {
+                  projectKey: project.key,
+                  number: updated.number,
+                  title: updated.title,
+                },
+              });
+            }
+          }
+          return updated;
+        },
+      );
       if (!row) {
         return c.json({ error: 'Issue not found' }, 404);
       }
@@ -299,15 +402,87 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
-      const deleted = db
-        .delete(issues)
-        .where(and(eq(issues.projectId, project.id), eq(issues.number, number)))
-        .returning()
-        .get();
+      const existing = findIssue(db, project.id, number);
+      if (!existing) {
+        return c.json({ error: 'Issue not found' }, 404);
+      }
+      // Read every relationship direction BEFORE the delete (#86): the FK cascade
+      // (parent_id -> set null, issue_blocked_by -> cascade) wipes these edges the
+      // instant the row goes, so the survivor list has to be captured up front.
+      const parent =
+        existing.parentId !== null
+          ? findIssueById(db, existing.parentId)
+          : undefined;
+      const children = childrenOf(db, existing.id);
+      const blockers = blockersOf(db, existing.id);
+      const dependents = dependentsOf(db, existing.id);
+      // The deleted issue's own {projectKey, number, title} is the counterpart
+      // snapshot on every synthesized survivor event - a snapshot, not a soft FK,
+      // is what survives the cascade (#86).
+      const counterpart = {
+        projectKey: project.key,
+        number: existing.number,
+        title: existing.title,
+      };
+      const actorId = c.get('actorId');
+      const now = new Date().toISOString();
+      const deleted = withEvents(
+        db,
+        bus,
+        { projectId: project.id, actorId, now },
+        (tx, emit) => {
+          if (parent) {
+            emit({
+              issueId: parent.id,
+              type: 'sub_issue_removed',
+              data: counterpart,
+            });
+          }
+          for (const child of children) {
+            emit({
+              issueId: child.id,
+              type: 'parent_removed',
+              data: counterpart,
+            });
+          }
+          for (const blocker of blockers) {
+            emit({
+              issueId: blocker.id,
+              type: 'blocking_removed',
+              data: counterpart,
+            });
+          }
+          for (const dependent of dependents) {
+            emit({
+              issueId: dependent.id,
+              type: 'blocked_by_removed',
+              data: counterpart,
+            });
+          }
+          // FK cascade drops the edges (and the deleted issue's own events) as
+          // part of this same statement; no `deleted` event type is ever stored.
+          return tx
+            .delete(issues)
+            .where(
+              and(eq(issues.projectId, project.id), eq(issues.number, number)),
+            )
+            .returning()
+            .get();
+        },
+      );
       if (!deleted) {
         return c.json({ error: 'Issue not found' }, 404);
       }
       bus.publishIssueDeleted(project.id, deleted.id, deleted.number);
+      // Only survivors whose derived blocked/ready can flip (the issues `existing`
+      // used to block) get re-published (#86), mirroring the state-change re-publish
+      // above.
+      for (const dependent of dependents) {
+        bus.publishIssueChanged(
+          project.id,
+          toIssue(db, dependent, project.key),
+        );
+      }
       return c.body(null, 204);
     });
 }

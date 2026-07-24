@@ -1,9 +1,11 @@
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Db } from './client';
+import { EventSchema, type Event } from '../domain/events';
+import type { Db, Tx } from './client';
 import {
   boards,
   comments,
+  events,
   issueBlockedBy,
   issueLabels,
   issues,
@@ -116,6 +118,26 @@ export const commentsForIssue = (db: Db, issueId: number): CommentSnapshot[] =>
     .orderBy(asc(comments.createdAt), asc(comments.id))
     .all();
 
+// An event snapshot is its row with `data` (stored as JSON text) parsed and
+// validated against the discriminated union (#82) - never cast. Shared by the
+// issue-events read route, withEvents' post-commit publish, and the
+// event.created SSE payload, so every read path parses the row the same way.
+export type EventSnapshot = Event;
+
+export const toEventSnapshot = (row: typeof events.$inferSelect): Event =>
+  EventSchema.parse({ ...row, data: JSON.parse(row.data) });
+
+// An issue's events in timeline order: (createdAt, id) - id is monotonic, so it
+// gives a stable tiebreak when a batch of events shares one createdAt (#76/#82).
+export const eventsForIssue = (db: Db, issueId: number): Event[] =>
+  db
+    .select()
+    .from(events)
+    .where(eq(events.issueId, issueId))
+    .orderBy(asc(events.createdAt), asc(events.id))
+    .all()
+    .map(toEventSnapshot);
+
 // column_axis is stored as JSON text (#24) and parsed with zod here - never cast
 // (CLAUDE.md). Ids are positive integers (label ids); the schema also guards the
 // storage layer against a malformed stored value.
@@ -138,9 +160,38 @@ export const toBoard = (row: typeof boards.$inferSelect): BoardSnapshot => ({
 export const findBoard = (db: Db, projectId: number) =>
   db.select().from(boards).where(eq(boards.projectId, projectId)).get();
 
-export const findIssue = (db: Db, projectId: number, number: number) =>
+// Accepts a plain Db or a withEvents transaction handle (#87's mention scan
+// reads inside the same txn as the content write it is diffing against).
+export const findIssue = (db: Db | Tx, projectId: number, number: number) =>
   db
     .select()
     .from(issues)
     .where(and(eq(issues.projectId, projectId), eq(issues.number, number)))
     .get();
+
+// Look up a single issue by its internal id (as opposed to findIssue's per-project
+// number) - used where a caller only has a FK-style id in hand, e.g. resolving a
+// parent row for its own snapshot (#86).
+export const findIssueById = (db: Db, id: number) =>
+  db.select().from(issues).where(eq(issues.id, id)).get();
+
+// The direct children of a given issue (its parentId), read BEFORE a delete so the
+// delete-cascade survivor events (#86) know who to notify - the FK's own
+// ON DELETE SET NULL fires as part of the same delete statement, after this read.
+export const childrenOf = (db: Db, parentId: number): IssueRow[] =>
+  db
+    .select(getTableColumns(issues))
+    .from(issues)
+    .where(eq(issues.parentId, parentId))
+    .all();
+
+// The issues that block a given issue - the reverse of dependentsOf. Read BEFORE a
+// delete so the delete-cascade survivor events (#86) can tell each blocker its
+// dependent is gone (blocking_removed), before the edge itself cascades away.
+export const blockersOf = (db: Db, issueId: number): IssueRow[] =>
+  db
+    .select(getTableColumns(issues))
+    .from(issues)
+    .innerJoin(issueBlockedBy, eq(issueBlockedBy.blockerId, issues.id))
+    .where(eq(issueBlockedBy.issueId, issueId))
+    .all();

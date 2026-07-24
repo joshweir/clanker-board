@@ -1,15 +1,14 @@
 import { z } from '@hono/zod-openapi';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createApp } from '../app';
-import { createDb } from '../db/client';
+import { testApp } from '../test/app';
 import { ActorSchema } from './actors';
 import { ErrorSchema } from './projects';
 
 // Seam 1: real Hono app + real in-memory SQLite, zod-parsed responses.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof testApp>['app'];
 
 beforeEach(() => {
-  app = createApp(createDb(':memory:'));
+  ({ app } = testApp());
 });
 
 const createActor = async (body: unknown) =>
@@ -48,14 +47,17 @@ describe('POST /api/actors', () => {
 });
 
 describe('GET /api/actors', () => {
-  test('lists actors, empty on a fresh instance', async () => {
-    expect(await (await app.request('/api/actors')).json()).toEqual([]);
+  test('lists actors, only the bootstrap Human on a fresh instance', async () => {
+    const fresh = z
+      .array(ActorSchema)
+      .parse(await (await app.request('/api/actors')).json());
+    expect(fresh.map((a) => a.name)).toEqual(['Human']);
     await createActor({ name: 'Ada', kind: 'human' });
     await createActor({ name: 'Bot', kind: 'agent' });
     const actors = z
       .array(ActorSchema)
       .parse(await (await app.request('/api/actors')).json());
-    expect(actors.map((a) => a.name)).toEqual(['Ada', 'Bot']);
+    expect(actors.map((a) => a.name)).toEqual(['Human', 'Ada', 'Bot']);
   });
 });
 

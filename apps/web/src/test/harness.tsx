@@ -1,7 +1,7 @@
 import { RouterProvider } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createApp, createDb } from '@clanker/api';
+import { createApp, createDb, ensureHumanActor } from '@clanker/api';
 import { createClient, type ApiClient } from '../api';
 import { createAppRouter } from '../router';
 
@@ -15,7 +15,11 @@ export async function renderApp(
   // can drive the optimistic revert path (#34) without mocking the api itself.
   wrapFetch?: (base: typeof fetch) => typeof fetch,
 ) {
-  const app = createApp(createDb(':memory:'));
+  const db = createDb(':memory:');
+  // Mirrors server.ts's boot sequence: a Human actor must exist before the SPA's
+  // default X-Actor-Id header (api.ts) can resolve one (#81).
+  ensureHumanActor(db);
+  const app = createApp(db);
   const base: typeof fetch = async (input, init) => app.request(input, init);
   const fetchImpl = wrapFetch ? wrapFetch(base) : base;
   const client = createClient(fetchImpl);

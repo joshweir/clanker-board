@@ -74,14 +74,18 @@ const fail = (what: string, status: number): never => {
 export async function seed(client: SeedClient): Promise<void> {
   // The canonical human actor (mirrors server boot's ensureHumanActor): agents
   // hand tickets back to a person by assigning the first kind='human' actor.
+  // Every mutation below is attributed to it via X-Actor-Id (#81).
   const actorsRes = await client.api.actors.$get();
   if (actorsRes.status !== 200) return fail('list actors', actorsRes.status);
-  if (!(await actorsRes.json()).some((a) => a.kind === 'human')) {
+  let human = (await actorsRes.json()).find((a) => a.kind === 'human');
+  if (!human) {
     const res = await client.api.actors.$post({
       json: { name: 'Human', kind: 'human' },
     });
-    if (res.status !== 201) fail('create human actor', res.status);
+    if (res.status !== 201) return fail('create human actor', res.status);
+    human = await res.json();
   }
+  const asActor = { headers: { 'X-Actor-Id': String(human.id) } };
 
   // Project (stable key). The typed client proves this GET is 200 or 404, so a
   // rerun creating nothing is a no-op: create only when it reports 404.
@@ -89,7 +93,7 @@ export async function seed(client: SeedClient): Promise<void> {
     param: { slug: SLUG },
   });
   if (existing.status === 404) {
-    const res = await client.api.projects.$post({ json: DEMO });
+    const res = await client.api.projects.$post({ json: DEMO }, asActor);
     if (res.status !== 201) fail('create project', res.status);
   }
 
@@ -102,10 +106,10 @@ export async function seed(client: SeedClient): Promise<void> {
   const labelId = new Map((await labelRes.json()).map((l) => [l.name, l.id]));
   for (const name of AXIS_LABELS) {
     if (labelId.has(name)) continue;
-    const res = await client.api.projects[':slug'].labels.$post({
-      param: { slug: SLUG },
-      json: { name },
-    });
+    const res = await client.api.projects[':slug'].labels.$post(
+      { param: { slug: SLUG }, json: { name } },
+      asActor,
+    );
     if (res.status !== 201) return fail(`create label "${name}"`, res.status);
     const created = await res.json();
     labelId.set(created.name, created.id);
@@ -124,10 +128,13 @@ export async function seed(client: SeedClient): Promise<void> {
   for (const spec of ISSUES) {
     let number = issueNumber.get(spec.title);
     if (number === undefined) {
-      const res = await client.api.projects[':slug'].issues.$post({
-        param: { slug: SLUG },
-        json: { title: spec.title, type: spec.type, body: spec.body },
-      });
+      const res = await client.api.projects[':slug'].issues.$post(
+        {
+          param: { slug: SLUG },
+          json: { title: spec.title, type: spec.type, body: spec.body },
+        },
+        asActor,
+      );
       if (res.status !== 201)
         return fail(`create issue "${spec.title}"`, res.status);
       number = (await res.json()).number;
@@ -138,17 +145,21 @@ export async function seed(client: SeedClient): Promise<void> {
         throw new Error(`seed: unknown label "${spec.label}"`);
       const res = await client.api.projects[':slug'].issues[':number'].labels[
         ':labelId'
-      ].$put({
-        param: { slug: SLUG, number: String(number), labelId: String(id) },
-      });
+      ].$put(
+        { param: { slug: SLUG, number: String(number), labelId: String(id) } },
+        asActor,
+      );
       if (res.status !== 200)
         return fail(`attach "${spec.label}" to "${spec.title}"`, res.status);
     }
     if (spec.closed) {
-      const res = await client.api.projects[':slug'].issues[':number'].$patch({
-        param: { slug: SLUG, number: String(number) },
-        json: { state: 'closed' },
-      });
+      const res = await client.api.projects[':slug'].issues[':number'].$patch(
+        {
+          param: { slug: SLUG, number: String(number) },
+          json: { state: 'closed' },
+        },
+        asActor,
+      );
       if (res.status !== 200) return fail(`close "${spec.title}"`, res.status);
     }
   }
@@ -158,10 +169,10 @@ export async function seed(client: SeedClient): Promise<void> {
   const columnAxis = AXIS_LABELS.map((name) => labelId.get(name)).filter(
     (id): id is number => id !== undefined,
   );
-  const boardRes = await client.api.projects[':slug'].board.$patch({
-    param: { slug: SLUG },
-    json: { columnAxis },
-  });
+  const boardRes = await client.api.projects[':slug'].board.$patch(
+    { param: { slug: SLUG }, json: { columnAxis } },
+    asActor,
+  );
   if (boardRes.status !== 200) fail('set board axis', boardRes.status);
 }
 

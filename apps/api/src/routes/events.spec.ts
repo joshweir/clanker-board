@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createApp } from '../app';
-import { createDb } from '../db/client';
+import { testApp } from '../test/app';
 import { nextEventOfType, readEvents } from '../test/sse';
 
 // Seam 1: drive the real Hono app + real in-memory SQLite and read the actual SSE
 // bytes off the streaming Response - no mocking of the bus or Drizzle. The stream
 // subscribes synchronously inside the handler, so a mutation after the stream is
 // open is always captured.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof testApp>['app'];
 
 beforeEach(() => {
-  app = createApp(createDb(':memory:'));
+  ({ app } = testApp());
 });
 
 const createProject = async (body: unknown) =>

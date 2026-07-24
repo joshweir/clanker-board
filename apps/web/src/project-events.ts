@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { Board, Comment, Issue, Label } from './api';
+import { EventSchema } from '@clanker/api';
+import type { Board, Comment, Issue, IssueEvent, Label } from './api';
 import { readEventStream } from './sse';
 
 // Per-project SSE payloads, validated at the client boundary (no casts). Each
@@ -34,6 +35,7 @@ const issueSnapshot = z.object({
   assigneeId: z.number().nullable(),
   claimedAt: z.string().nullable(),
   parentId: z.number().nullable(),
+  authorId: z.number(),
   key: z.string(),
   labels: z.array(labelSnapshot),
   blockers: z.array(blockerSnapshot),
@@ -74,6 +76,7 @@ export interface ProjectEventHandlers {
   onLabelChanged?: (label: Label) => void;
   onLabelDeleted?: (id: number) => void;
   onCommentCreated?: (comment: Comment) => void;
+  onEventCreated?: (event: IssueEvent) => void;
   onBoardChanged?: (board: Board) => void;
 }
 
@@ -109,6 +112,11 @@ export function subscribeToProjectEvents(
           break;
         case 'comment.created':
           handlers.onCommentCreated?.(commentSnapshot.parse(data));
+          break;
+        case 'event.created':
+          // Validated against the server's own EventSchema (#83) - a shared source
+          // of truth, not a second hand-duplicated 18-variant zod schema.
+          handlers.onEventCreated?.(EventSchema.parse(data));
           break;
         case 'board.changed':
           handlers.onBoardChanged?.(boardSnapshot.parse(data));

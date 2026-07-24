@@ -1,17 +1,17 @@
 import { z } from '@hono/zod-openapi';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createApp } from '../app';
-import { createDb } from '../db/client';
+import { testApp } from '../test/app';
 import { nextEventOfType, readEvents } from '../test/sse';
 import { ActorSchema } from './actors';
 import { CommentSchema } from './comments';
 
 // Seam 1: drive the real Hono app through app.request against a real in-memory
 // SQLite with migrations applied. No mocking of Drizzle, SQLite, or the bus.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof testApp>['app'];
+let actorId: number;
 
 beforeEach(() => {
-  app = createApp(createDb(':memory:'));
+  ({ app, actorId } = testApp());
 });
 
 const json = (body: unknown) => ({
@@ -38,10 +38,23 @@ const createActor = async (name = 'Ada', kind = 'human') =>
     ).json(),
   );
 
-const postComment = async (slug: string, number: number, body: unknown) =>
+// actorHeader overrides the ambient testApp actor (#81), so a test can prove
+// attribution to a specific (or unknown) actor without a body actorId field.
+const postComment = async (
+  slug: string,
+  number: number,
+  body: unknown,
+  actorHeader?: number,
+) =>
   app.request(`/api/projects/${slug}/issues/${number}/comments`, {
     method: 'POST',
-    ...json(body),
+    headers: {
+      'content-type': 'application/json',
+      ...(actorHeader === undefined
+        ? {}
+        : { 'X-Actor-Id': String(actorHeader) }),
+    },
+    body: JSON.stringify(body),
   });
 
 const listComments = async (slug: string, number: number) =>
@@ -62,12 +75,9 @@ describe('POST /api/projects/:slug/issues/:number/comments', () => {
     await createIssue('demo', 'Task');
   });
 
-  test('appends a comment attributed to an actor', async () => {
-    const actor = await createActor();
-    const res = await postComment('demo', 1, {
-      actorId: actor.id,
-      body: 'first!',
-    });
+  test('appends a comment attributed to the acting actor', async () => {
+    const actor = await createActor('Agent Smith', 'agent');
+    const res = await postComment('demo', 1, { body: 'first!' }, actor.id);
     expect(res.status).toBe(201);
     expect(await parseComment(res)).toMatchObject({
       id: expect.any(Number),
@@ -77,37 +87,24 @@ describe('POST /api/projects/:slug/issues/:number/comments', () => {
   });
 
   test.each([
-    ['missing actorId', { body: 'hi' }],
-    ['missing body', { actorId: 1 }],
-    ['empty body', { actorId: 1, body: '' }],
+    ['missing body', {}],
+    ['empty body', { body: '' }],
   ])('rejects %s with 400', async (_label, body) => {
     const res = await postComment('demo', 1, body);
     expect(res.status).toBe(400);
   });
 
-  test('404s for an unknown actor', async () => {
-    const res = await postComment('demo', 1, { actorId: 999, body: 'ghost' });
-    expect(res.status).toBe(404);
-  });
-
   test('404s for an unknown project', async () => {
-    const actor = await createActor();
-    expect(
-      (await postComment('nope', 1, { actorId: actor.id, body: 'x' })).status,
-    ).toBe(404);
+    expect((await postComment('nope', 1, { body: 'x' })).status).toBe(404);
   });
 
   test('404s for an unknown issue', async () => {
-    const actor = await createActor();
-    expect(
-      (await postComment('demo', 99, { actorId: actor.id, body: 'x' })).status,
-    ).toBe(404);
+    expect((await postComment('demo', 99, { body: 'x' })).status).toBe(404);
   });
 
   test('has no edit or delete route (append-only)', async () => {
-    const actor = await createActor();
     const comment = await parseComment(
-      await postComment('demo', 1, { actorId: actor.id, body: 'x' }),
+      await postComment('demo', 1, { body: 'x' }),
     );
     const base = `/api/projects/demo/issues/1/comments/${comment.id}`;
     expect(
@@ -125,9 +122,8 @@ describe('GET /api/projects/:slug/issues/:number/comments', () => {
   });
 
   test('lists comments in chronological (append) order', async () => {
-    const actor = await createActor();
     for (const body of ['one', 'two', 'three']) {
-      await postComment('demo', 1, { actorId: actor.id, body });
+      await postComment('demo', 1, { body });
     }
     expect((await listComments('demo', 1)).map((c) => c.body)).toEqual([
       'one',
@@ -150,10 +146,9 @@ describe('GET /api/projects/:slug/issues/:number/comments', () => {
   });
 
   test("an issue's comments are scoped to that issue", async () => {
-    const actor = await createActor();
     await createIssue('demo', 'Other');
-    await postComment('demo', 1, { actorId: actor.id, body: 'on one' });
-    await postComment('demo', 2, { actorId: actor.id, body: 'on two' });
+    await postComment('demo', 1, { body: 'on one' });
+    await postComment('demo', 2, { body: 'on two' });
     expect((await listComments('demo', 1)).map((c) => c.body)).toEqual([
       'on one',
     ]);
@@ -167,8 +162,7 @@ describe('cascade behaviour', () => {
   test('deleting the issue removes its comments', async () => {
     await createProject('DEMO');
     await createIssue('demo', 'Task');
-    const actor = await createActor();
-    await postComment('demo', 1, { actorId: actor.id, body: 'doomed' });
+    await postComment('demo', 1, { body: 'doomed' });
 
     expect(
       (await app.request('/api/projects/demo/issues/1', { method: 'DELETE' }))
@@ -183,8 +177,7 @@ describe('cascade behaviour', () => {
   test('deleting the project removes its issues comments', async () => {
     await createProject('DEMO');
     await createIssue('demo', 'Task');
-    const actor = await createActor();
-    await postComment('demo', 1, { actorId: actor.id, body: 'doomed' });
+    await postComment('demo', 1, { body: 'doomed' });
 
     expect(
       (await app.request('/api/projects/demo', { method: 'DELETE' })).status,
@@ -209,13 +202,12 @@ describe('per-project SSE emissions', () => {
   test('emits comment.created so open clients append without reload', async () => {
     await createProject('DEMO');
     await createIssue('demo', 'Task');
-    const actor = await createActor();
 
     const { events, controller } = await openStream('demo');
-    await postComment('demo', 1, { actorId: actor.id, body: 'live!' });
+    await postComment('demo', 1, { body: 'live!' });
     const evt = await nextEventOfType(events, 'comment.created');
     expect(CommentSchema.parse(evt.data)).toMatchObject({
-      actorId: actor.id,
+      actorId,
       body: 'live!',
     });
     controller.abort();

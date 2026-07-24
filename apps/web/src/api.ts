@@ -6,8 +6,42 @@ import type { AppType } from '@clanker/api';
 // in-process api app, so the browser client and Seam-2 tests share one path.
 export type ApiClient = ReturnType<typeof hc<AppType>>;
 
+// Every mutation is attributed to an ambient caller-asserted actor (#18, #81).
+// The SPA has no auth, so it speaks as the instance's Human actor (the same
+// "first kind=human actor" convention as ensureHumanActor/server boot) - looked
+// up once (via the unwrapped fetch, to avoid recursing back through itself)
+// and cached, then attached as a default X-Actor-Id header on every request.
+// Call sites never mention the actor again.
 export function createClient(fetchImpl?: typeof fetch): ApiClient {
-  return hc<AppType>('/', fetchImpl ? { fetch: fetchImpl } : {});
+  const baseFetch = fetchImpl ?? fetch;
+  // Cache the resolved id, not the in-flight promise - a rejected promise
+  // (transient network blip, momentary empty-actor race) must not stick
+  // forever, or every later request through this client throws until reload.
+  let actorId: number | undefined;
+  const resolveActorId = async () => {
+    if (actorId !== undefined) {
+      return actorId;
+    }
+    const rows: { id: number; kind: string }[] = await (
+      await baseFetch('/api/actors')
+    ).json();
+    const human = rows.find((row) => row.kind === 'human');
+    if (!human) {
+      throw new Error('no human actor exists on this instance');
+    }
+    actorId = human.id;
+    return actorId;
+  };
+  const withActor: typeof fetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    // Respect a caller-supplied header (e.g. a test attributing one call to a
+    // different actor) rather than clobbering it with the instance default.
+    if (!headers.has('X-Actor-Id')) {
+      headers.set('X-Actor-Id', String(await resolveActorId()));
+    }
+    return baseFetch(input, { ...init, headers });
+  };
+  return hc<AppType>('/', { fetch: withActor });
 }
 
 export type Project = InferResponseType<
@@ -33,6 +67,14 @@ export type Issue = InferResponseType<
 // lists them and appends new ones live off comment.created (#36).
 export type Comment = InferResponseType<
   ApiClient['api']['projects'][':slug']['issues'][':number']['comments']['$get'],
+  200
+>[number];
+
+// A timeline event (#82/#83): the discriminated-union row the issue's activity
+// rail merges with its comments, ordered (createdAt, id). Named `IssueEvent` (not
+// `Event`) so it never shadows the DOM's own `Event` type in a web module.
+export type IssueEvent = InferResponseType<
+  ApiClient['api']['projects'][':slug']['issues'][':number']['events']['$get'],
   200
 >[number];
 

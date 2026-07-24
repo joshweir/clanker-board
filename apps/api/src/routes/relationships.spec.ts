@@ -1,17 +1,27 @@
 import { z } from '@hono/zod-openapi';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { createApp } from '../app';
-import { createDb } from '../db/client';
+import { EventSchema } from '../domain/events';
+import { testApp } from '../test/app';
 import { nextEventOfType, readEvents } from '../test/sse';
 import { IssueSchema } from './issues';
 
 // Seam 1: drive the real Hono app through app.request against a real in-memory
 // SQLite with migrations applied. No mocking of Drizzle, SQLite, or the bus.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof testApp>['app'];
+let actorId: number;
 
 beforeEach(() => {
-  app = createApp(createDb(':memory:'));
+  ({ app, actorId } = testApp());
 });
+
+const listEvents = async (slug: string, number: number) =>
+  z
+    .array(EventSchema)
+    .parse(
+      await (
+        await app.request(`/api/projects/${slug}/issues/${number}/events`)
+      ).json(),
+    );
 
 const json = (body: unknown) => ({
   headers: { 'content-type': 'application/json' },
@@ -274,6 +284,239 @@ describe('blocking DAG and derived state', () => {
       blocked: false,
       ready: true,
     });
+  });
+});
+
+// #86: every relationship edge change emits on BOTH issues, same actor + shared
+// timestamp, ordered by id. Each `expect.objectContaining` below pins actorId so
+// a mismatch would fail loudly, not silently pass on an unrelated field.
+describe('relationship events (#86)', () => {
+  test('setting a parent emits parent_added (child) + sub_issue_added (parent), shared timestamp', async () => {
+    await seed(2);
+    await setParent('demo', 2, 1);
+
+    const child = await listEvents('demo', 2);
+    const added = child.find((e) => e.type === 'parent_added');
+    expect(added).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 1, title: 'Issue 1' },
+    });
+
+    const parent = await listEvents('demo', 1);
+    const subAdded = parent.find((e) => e.type === 'sub_issue_added');
+    expect(subAdded).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 2, title: 'Issue 2' },
+    });
+    expect(subAdded?.createdAt).toBe(added?.createdAt);
+  });
+
+  test('clearing a parent emits parent_removed (child) + sub_issue_removed (parent)', async () => {
+    await seed(2);
+    await setParent('demo', 2, 1);
+    await clearParent('demo', 2);
+
+    const child = await listEvents('demo', 2);
+    expect(child.find((e) => e.type === 'parent_removed')).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 1, title: 'Issue 1' },
+    });
+    const parent = await listEvents('demo', 1);
+    expect(parent.find((e) => e.type === 'sub_issue_removed')).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 2, title: 'Issue 2' },
+    });
+  });
+
+  test('reparenting emits removed on the old parent and added on the new one', async () => {
+    await seed(3);
+    await setParent('demo', 3, 1);
+    await setParent('demo', 3, 2);
+
+    const child = await listEvents('demo', 3);
+    expect(child.map((e) => e.type)).toContain('parent_removed');
+    expect(child.map((e) => e.type)).toContain('parent_added');
+    expect((await listEvents('demo', 1)).map((e) => e.type)).toContain(
+      'sub_issue_removed',
+    );
+    expect((await listEvents('demo', 2)).map((e) => e.type)).toContain(
+      'sub_issue_added',
+    );
+  });
+
+  test('re-declaring the same parent emits nothing', async () => {
+    await seed(2);
+    await setParent('demo', 2, 1);
+    const before = (await listEvents('demo', 2)).length;
+    await setParent('demo', 2, 1);
+    expect(await listEvents('demo', 2)).toHaveLength(before);
+  });
+
+  test('clearing an unset parent emits nothing', async () => {
+    await seed(1);
+    // Every issue already carries its own `opened` event (#82); only relationship
+    // types are asserted absent here.
+    await clearParent('demo', 1);
+    expect((await listEvents('demo', 1)).map((e) => e.type)).toEqual([
+      'opened',
+    ]);
+  });
+
+  test('blocking emits blocked_by_added (blocked) + blocking_added (blocker)', async () => {
+    await seed(2);
+    await block('demo', 1, 2);
+
+    const blocked = await listEvents('demo', 1);
+    const blockedByAdded = blocked.find((e) => e.type === 'blocked_by_added');
+    expect(blockedByAdded).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 2, title: 'Issue 2' },
+    });
+
+    const blocker = await listEvents('demo', 2);
+    const blockingAdded = blocker.find((e) => e.type === 'blocking_added');
+    expect(blockingAdded).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 1, title: 'Issue 1' },
+    });
+    expect(blockingAdded?.createdAt).toBe(blockedByAdded?.createdAt);
+  });
+
+  test('unblocking emits blocked_by_removed (blocked) + blocking_removed (blocker)', async () => {
+    await seed(2);
+    await block('demo', 1, 2);
+    await unblock('demo', 1, 2);
+
+    expect(
+      (await listEvents('demo', 1)).find(
+        (e) => e.type === 'blocked_by_removed',
+      ),
+    ).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 2, title: 'Issue 2' },
+    });
+    expect(
+      (await listEvents('demo', 2)).find((e) => e.type === 'blocking_removed'),
+    ).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 1, title: 'Issue 1' },
+    });
+  });
+
+  test('declaring the same block edge twice emits nothing the second time', async () => {
+    await seed(2);
+    await block('demo', 1, 2);
+    const before = (await listEvents('demo', 1)).length;
+    await block('demo', 1, 2);
+    expect(await listEvents('demo', 1)).toHaveLength(before);
+  });
+
+  test('unblocking an edge that was never declared emits nothing', async () => {
+    await seed(2);
+    await unblock('demo', 1, 2);
+    expect((await listEvents('demo', 1)).map((e) => e.type)).toEqual([
+      'opened',
+    ]);
+    expect((await listEvents('demo', 2)).map((e) => e.type)).toEqual([
+      'opened',
+    ]);
+  });
+});
+
+// #86: BEFORE a delete, every surviving counterpart across the four relationship
+// directions gets the matching `*_removed` event, attributed to the deleting
+// actor with the DELETED issue's own {projectKey, number, title} as the
+// counterpart snapshot; the deleted issue's own events vanish (FK cascade); no
+// `deleted` event type is ever stored.
+describe('delete-cascade survivor events (#86)', () => {
+  test('deleting a parent emits sub_issue_removed on it; deleting a child emits parent_removed on the survivor', async () => {
+    await seed(2);
+    await setParent('demo', 2, 1); // 1 is 2's parent
+    await app.request('/api/projects/demo/issues/1', { method: 'DELETE' });
+
+    expect(
+      (await listEvents('demo', 2)).find((e) => e.type === 'parent_removed'),
+    ).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 1, title: 'Issue 1' },
+    });
+  });
+
+  test('deleting a child emits sub_issue_removed on the surviving parent', async () => {
+    await seed(2);
+    await setParent('demo', 2, 1); // 1 is 2's parent
+    await app.request('/api/projects/demo/issues/2', { method: 'DELETE' });
+
+    expect(
+      (await listEvents('demo', 1)).find((e) => e.type === 'sub_issue_removed'),
+    ).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 2, title: 'Issue 2' },
+    });
+  });
+
+  test('deleting a blocked issue emits blocking_removed on its blocker', async () => {
+    await seed(2);
+    await block('demo', 1, 2); // 1 blocked-by 2
+    await app.request('/api/projects/demo/issues/1', { method: 'DELETE' });
+
+    expect(
+      (await listEvents('demo', 2)).find((e) => e.type === 'blocking_removed'),
+    ).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 1, title: 'Issue 1' },
+    });
+  });
+
+  test('deleting a blocker emits blocked_by_removed on its dependent, which becomes ready again (issue.changed)', async () => {
+    await seed(2);
+    await block('demo', 1, 2); // 1 blocked-by 2
+    const { events: stream, controller } = await (async () => {
+      const c = new AbortController();
+      const res = await app.request('/api/projects/demo/events', {
+        signal: c.signal,
+      });
+      return { events: readEvents(res), controller: c };
+    })();
+
+    await app.request('/api/projects/demo/issues/2', { method: 'DELETE' });
+
+    expect(
+      (await listEvents('demo', 1)).find(
+        (e) => e.type === 'blocked_by_removed',
+      ),
+    ).toMatchObject({
+      actorId,
+      data: { projectKey: 'DEMO', number: 2, title: 'Issue 2' },
+    });
+    const evt = await nextEventOfType(stream, 'issue.changed');
+    expect(IssueSchema.parse(evt.data)).toMatchObject({
+      number: 1,
+      blocked: false,
+      ready: true,
+    });
+    controller.abort();
+  });
+
+  test('the deleted issue never gets a `deleted` event type; its own events vanish with it', async () => {
+    await seed(2);
+    await setParent('demo', 2, 1);
+    // issue 1 has its own `opened` + `sub_issue_added` events before deletion.
+    expect((await listEvents('demo', 1)).length).toBeGreaterThan(0);
+
+    expect(
+      (await app.request('/api/projects/demo/issues/1', { method: 'DELETE' }))
+        .status,
+    ).toBe(204);
+
+    // Issue 1 no longer exists at all - its own events (and the row) are gone.
+    expect(
+      (await app.request('/api/projects/demo/issues/1/events')).status,
+    ).toBe(404);
+    const allTypesEverEmitted = (await listEvents('demo', 2)).map(
+      (e) => e.type,
+    );
+    expect(allTypesEverEmitted).not.toContain('deleted');
   });
 });
 
