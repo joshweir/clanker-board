@@ -2,13 +2,13 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 import type { Actor, Comment, IssueEvent } from '../api';
 import { colorFor } from '../type-color';
-import { mergeTimeline, Timeline } from './timeline';
+import { groupTimeline, mergeTimeline, Timeline } from './timeline';
 
 // Seam 2 pure-unit (#79 testing decisions: "timeline merge orders events +
 // comments by (createdAt, id)"). Fixtures cover the shapes the merge sees today
-// (comments, `opened`, and the lifecycle/field/involvement/label shapes from
-// #84/#85) - the merge/render machinery does not care which event type it is
-// handed.
+// (comments, `opened`, the lifecycle/field/involvement/label shapes from
+// #84/#85, and the two-sided relationship shapes from #86) - the merge/render
+// machinery does not care which event type it is handed.
 
 const human: Actor = { id: 1, name: 'Ada', kind: 'human', createdAt: 't' };
 const agent: Actor = {
@@ -28,6 +28,25 @@ function event(
   actorId: number = human.id,
 ): IssueEvent {
   return { id, issueId: 1, actorId, type, data: {}, createdAt };
+}
+
+// A relationship event (#86): same shape as `event` above but carrying the
+// frozen counterpart snapshot instead of an empty payload.
+function relEvent(
+  type: 'blocked_by_added' | 'parent_added',
+  id: number,
+  createdAt: string,
+  actorId: number = human.id,
+  number = 2,
+): IssueEvent {
+  return {
+    id,
+    issueId: 1,
+    actorId,
+    type,
+    data: { projectKey: 'DEMO', number, title: `Issue ${number}` },
+    createdAt,
+  };
 }
 
 // Label events carry a {labelId, name} snapshot rather than the empty data
@@ -148,6 +167,91 @@ describe('mergeTimeline', () => {
       'comment-9', // createdAt :01
       'event-5', // createdAt :02
     ]);
+  });
+});
+
+describe('groupTimeline', () => {
+  test('folds adjacent same-type, same-actor relationship events into one group, labelled with the latest time', () => {
+    const nodes = mergeTimeline(
+      [
+        relEvent(
+          'blocked_by_added',
+          1,
+          '2026-07-20T00:00:00.000Z',
+          human.id,
+          2,
+        ),
+        relEvent(
+          'blocked_by_added',
+          2,
+          '2026-07-20T00:00:01.000Z',
+          human.id,
+          3,
+        ),
+      ],
+      [],
+    );
+
+    const groups = groupTimeline(nodes);
+
+    expect(groups).toHaveLength(1);
+    const [group] = groups;
+    if (group?.kind !== 'event-group') {
+      throw new Error('expected a group');
+    }
+    expect(group.events.map((e) => e.id)).toEqual([1, 2]);
+    expect(group.createdAt).toBe('2026-07-20T00:00:01.000Z');
+  });
+
+  test('breaks the run on a different actor', () => {
+    const nodes = mergeTimeline(
+      [
+        relEvent('blocked_by_added', 1, '2026-07-20T00:00:00.000Z', human.id),
+        relEvent('blocked_by_added', 2, '2026-07-20T00:00:01.000Z', agent.id),
+      ],
+      [],
+    );
+
+    expect(groupTimeline(nodes)).toHaveLength(2);
+  });
+
+  test('breaks the run on a different relationship type', () => {
+    const nodes = mergeTimeline(
+      [
+        relEvent('blocked_by_added', 1, '2026-07-20T00:00:00.000Z'),
+        relEvent('parent_added', 2, '2026-07-20T00:00:01.000Z'),
+      ],
+      [],
+    );
+
+    expect(groupTimeline(nodes)).toHaveLength(2);
+  });
+
+  test('breaks the run when a comment lands between two matching events', () => {
+    const nodes = mergeTimeline(
+      [
+        relEvent('blocked_by_added', 1, '2026-07-20T00:00:00.000Z'),
+        relEvent('blocked_by_added', 3, '2026-07-20T00:00:02.000Z'),
+      ],
+      [comment({ id: 1, createdAt: '2026-07-20T00:00:01.000Z' })],
+    );
+
+    const groups = groupTimeline(nodes);
+
+    expect(groups.map((g) => g.kind)).toEqual([
+      'event-group',
+      'comment',
+      'event-group',
+    ]);
+  });
+
+  test('passes non-relationship events and comments through unchanged', () => {
+    const nodes = mergeTimeline(
+      [event('opened', 1, '2026-07-20T00:00:00.000Z')],
+      [comment({ id: 1, createdAt: '2026-07-20T00:00:01.000Z' })],
+    );
+
+    expect(groupTimeline(nodes)).toEqual(nodes);
   });
 });
 
