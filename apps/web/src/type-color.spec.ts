@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { typeColor, typeColors } from './type-color';
+import { colorFor, typeColor, typeColors } from './type-color';
 
 describe('typeColor', () => {
   test('round-robins the palette once types outnumber it', () => {
@@ -16,5 +16,18 @@ describe('typeColor', () => {
     const colors = typeColors(['bug', 'feature', 'task']);
     expect(colors.get('bug')).toEqual(typeColor(0));
     expect(colors.get('task')).toEqual(typeColor(2));
+  });
+});
+
+describe('colorFor', () => {
+  // Keyed purely on labelId (never on name), so calling it twice for the same
+  // id - the only thing a rename could not change - always agrees: the chip
+  // color survives a rename.
+  test('is deterministic for a given labelId', () => {
+    expect(colorFor(7)).toEqual(colorFor(7));
+  });
+
+  test('differs across distinct ids (typical case)', () => {
+    expect(colorFor(1)).not.toEqual(colorFor(2));
   });
 });

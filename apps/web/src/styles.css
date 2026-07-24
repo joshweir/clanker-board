@@ -369,6 +369,13 @@ button.danger {
   background: color-mix(in srgb, CanvasText 6%, Canvas);
 }
 
+/* The `typed` timeline event (#84) shows the old type badge struck through next
+   to the new one, GitHub-style. */
+.issue-type-badge-old {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
 /* Agent actors (#18/#81) get a small neutral ringed glyph ahead of their name;
    humans render bare - the one visual cue distinguishing a bot from a person. */
 .actor-kind-badge {
@@ -1018,6 +1025,35 @@ button.danger {
   border-radius: 999px;
   background: Canvas;
   border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+
+/* The `closed`/`reopened` events use their own status glyph as the rail marker
+   (#84), same ~1.5rem band as the plain dot. `reopened` is the open glyph: a
+   green ring with a filled centre dot. `closed` is a purple outline circle with
+   a tick and no fill - no ring, just the one boundary. */
+.timeline-dot-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #3fb950;
+}
+
+.timeline-dot-open::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #3fb950;
+}
+
+.timeline-dot-closed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ab7df8;
+  color: #ab7df8;
+  font-size: 0.8rem;
+  line-height: 1;
 }
 
 .timeline-line {

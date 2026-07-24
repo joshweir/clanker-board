@@ -268,8 +268,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
       if (!project) {
         return c.json({ error: 'Project not found' }, 404);
       }
-      const existing = findIssue(db, project.id, number);
-      if (!existing) {
+      const before = findIssue(db, project.id, number);
+      if (!before) {
         return c.json({ error: 'Issue not found' }, 404);
       }
       const patch = c.req.valid('json');
@@ -294,12 +294,15 @@ export function issuesRouter(db: Db, bus: EventBus) {
         patch.assigneeId === undefined
           ? {}
           : { claimedAt: patch.assigneeId === null ? null : now };
-      // The update and its mention scan run in one transaction (#76/#87): a
-      // body change is otherwise silent (#84 owns title/type/state/assignee
-      // diff-events), but it still triggers the mention scan - fired = the
-      // targets newly resolved from the new body but not the old one, so
-      // editing in a fresh reference fires once and removing one retracts
-      // nothing (there is no retraction event type).
+      // The mutation and its events run in one transaction (#76/#82/#84/#87):
+      // diff the before-row against the `.returning()` after-row field-by-field,
+      // emitting one event per genuinely-changed event-worthy field (a field
+      // sent equal to its current value, or never sent at all, leaves before
+      // === after, so it emits nothing). `body` and `rank` are never diffed as
+      // their own event, but a changed `body` still triggers the mention scan
+      // below - fired = the targets newly resolved from the new body but not
+      // the old one, so editing in a fresh reference fires once and removing
+      // one retracts nothing (there is no retraction event type).
       const row = withEvents(
         db,
         bus,
@@ -313,13 +316,49 @@ export function issuesRouter(db: Db, bus: EventBus) {
             )
             .returning()
             .get();
-          if (updated && patch.body !== undefined) {
+          if (before.title !== updated.title) {
+            emit({
+              issueId: updated.id,
+              type: 'renamed',
+              data: { from: before.title, to: updated.title },
+            });
+          }
+          if (before.type !== updated.type) {
+            emit({
+              issueId: updated.id,
+              type: 'typed',
+              data: { from: before.type, to: updated.type },
+            });
+          }
+          if (before.state !== updated.state) {
+            emit({
+              issueId: updated.id,
+              type: updated.state === 'closed' ? 'closed' : 'reopened',
+              data: {},
+            });
+          }
+          if (before.assigneeId !== updated.assigneeId) {
+            if (updated.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'assigned',
+                data: { assigneeActorId: updated.assigneeId },
+              });
+            } else if (before.assigneeId !== null) {
+              emit({
+                issueId: updated.id,
+                type: 'unassigned',
+                data: { assigneeActorId: before.assigneeId },
+              });
+            }
+          }
+          if (patch.body !== undefined) {
             const targets = newlyMentionedTargets(
               tx,
               project.id,
               project.key,
-              existing.id,
-              existing.body,
+              before.id,
+              before.body,
               patch.body,
             );
             for (const targetId of targets) {
