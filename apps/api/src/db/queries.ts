@@ -1,7 +1,7 @@
 import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { EventSchema, type Event } from '../domain/events';
-import type { Db } from './client';
+import type { Db, Tx } from './client';
 import {
   boards,
   comments,
@@ -160,7 +160,9 @@ export const toBoard = (row: typeof boards.$inferSelect): BoardSnapshot => ({
 export const findBoard = (db: Db, projectId: number) =>
   db.select().from(boards).where(eq(boards.projectId, projectId)).get();
 
-export const findIssue = (db: Db, projectId: number, number: number) =>
+// Accepts a plain Db or a withEvents transaction handle (#87's mention scan
+// reads inside the same txn as the content write it is diffing against).
+export const findIssue = (db: Db | Tx, projectId: number, number: number) =>
   db
     .select()
     .from(issues)

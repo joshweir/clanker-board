@@ -9,6 +9,7 @@ import {
   toIssue,
 } from '../db/queries';
 import { actors, issues } from '../db/schema';
+import { newlyMentionedTargets } from '../domain/mentions';
 import { rankAfter } from '../domain/rank';
 import type { EventBus } from '../events/bus';
 import { withEvents } from '../events/with-events';
@@ -284,8 +285,8 @@ export function issuesRouter(db: Db, bus: EventBus) {
           return c.json({ error: `No actor with id ${patch.assigneeId}` }, 400);
         }
       }
-      const now = new Date().toISOString();
       const actorId = c.get('actorId');
+      const now = new Date().toISOString();
       // claimedAt tracks when the CURRENT assignee was set, whatever the write
       // path (claim endpoints or this PATCH), so lease staleness (routes/
       // claims.ts) has one consistent meaning; unassigning clears it.
@@ -293,12 +294,15 @@ export function issuesRouter(db: Db, bus: EventBus) {
         patch.assigneeId === undefined
           ? {}
           : { claimedAt: patch.assigneeId === null ? null : now };
-      // The mutation and its discrete lifecycle/field/involvement events (#84)
-      // run in one transaction: diff the before-row against the `.returning()`
-      // after-row field-by-field, emitting one event per genuinely-changed
-      // event-worthy field. A field sent equal to its current value (or a field
-      // never sent at all) leaves before === after, so it emits nothing - `body`
-      // and `rank` are never diffed at all (silent by omission).
+      // The mutation and its events run in one transaction (#76/#82/#84/#87):
+      // diff the before-row against the `.returning()` after-row field-by-field,
+      // emitting one event per genuinely-changed event-worthy field (a field
+      // sent equal to its current value, or never sent at all, leaves before
+      // === after, so it emits nothing). `body` and `rank` are never diffed as
+      // their own event, but a changed `body` still triggers the mention scan
+      // below - fired = the targets newly resolved from the new body but not
+      // the old one, so editing in a fresh reference fires once and removing
+      // one retracts nothing (there is no retraction event type).
       const row = withEvents(
         db,
         bus,
@@ -345,6 +349,27 @@ export function issuesRouter(db: Db, bus: EventBus) {
                 issueId: updated.id,
                 type: 'unassigned',
                 data: { assigneeActorId: before.assigneeId },
+              });
+            }
+          }
+          if (patch.body !== undefined) {
+            const targets = newlyMentionedTargets(
+              tx,
+              project.id,
+              project.key,
+              before.id,
+              before.body,
+              patch.body,
+            );
+            for (const targetId of targets) {
+              emit({
+                issueId: targetId,
+                type: 'mentioned',
+                data: {
+                  projectKey: project.key,
+                  number: updated.number,
+                  title: updated.title,
+                },
               });
             }
           }

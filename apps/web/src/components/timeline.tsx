@@ -17,8 +17,9 @@ import type { MentionableIssue } from './remark-mentions';
 // reads "<author> opened <when>"). #84 adds real phrasing/icons for the
 // lifecycle (`closed`/`reopened`), field (`renamed`/`typed`) and involvement
 // (`assigned`/`unassigned`) shapes; #85 adds the label chip wording (`labeled`/
-// `unlabeled`); relationships (#86) and mentions (#87) still fall through
-// `eventLine`'s placeholder - the merge, ordering and rail layout never change.
+// `unlabeled`); #87 adds the `mentioned` wording plus its link back to the
+// source issue. Relationships (#86) still fall through `eventLine`'s
+// placeholder - the merge, ordering and rail layout never change.
 
 type TimelineNode =
   | { kind: 'event'; key: string; event: IssueEvent }
@@ -70,13 +71,15 @@ function labelChip({ labelId, name }: { labelId: number; name: string }) {
 
 // The self-contained one-liner phrasing for an event type, GitHub-style ("<actor>
 // <predicate> <time>"). `opened` never actually reaches here (filtered below,
-// kept for completeness). Lifecycle/field/involvement (#84) and labels (#85)
-// render real wording here; relationships (#86) and mentions (#87) are still a
+// kept for completeness). Lifecycle/field/involvement (#84), labels (#85) and
+// mentions (#87) all render real wording here; relationships (#86) are still a
 // bare placeholder until their own ticket lands.
 function eventLine(event: IssueEvent, actors: Actor[]): ReactNode {
   switch (event.type) {
     case 'opened':
       return 'opened this';
+    case 'mentioned':
+      return 'mentioned this from';
     case 'closed':
       return 'closed this';
     case 'reopened':
@@ -125,6 +128,23 @@ function eventLine(event: IssueEvent, actors: Actor[]): ReactNode {
     default:
       return event.type;
   }
+}
+
+// The `mentioned` row's link back to the SOURCE issue (#87): a plain `<a>`
+// (not the router's `Link`) opening in a new tab, mirroring `IssueKeyLink`
+// (#40) / the mention-link convention already used in rendered markdown
+// (`remark-mentions.ts`'s href shape, `markdown.tsx`'s target/rel) - a
+// snapshot link, not a router navigation, so this component stays free of a
+// router-context dependency.
+function mentionSourceLink(
+  event: IssueEvent,
+): { href: string; label: string } | null {
+  if (event.type !== 'mentioned') return null;
+  const { projectKey, number, title } = event.data;
+  return {
+    href: `/projects/${projectKey.toLowerCase()}/issues/${number}`,
+    label: `${projectKey}-${number} ${title}`,
+  };
 }
 
 // The rail marker for a lifecycle event (#84): `closed`/`reopened` swap the
@@ -205,6 +225,7 @@ export function Timeline({
           }
 
           const { event } = node;
+          const source = mentionSourceLink(event);
           return (
             <li
               key={node.key}
@@ -214,6 +235,13 @@ export function Timeline({
               <p className="timeline-line">
                 <ActorName actorId={event.actorId} actors={actors} />{' '}
                 {eventLine(event, actors)}{' '}
+                {source ? (
+                  <>
+                    <a href={source.href} target="_blank" rel="noopener">
+                      {source.label}
+                    </a>{' '}
+                  </>
+                ) : null}
                 <time dateTime={event.createdAt}>
                   {formatOpened(event.createdAt)}
                 </time>

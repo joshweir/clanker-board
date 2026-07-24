@@ -234,6 +234,36 @@ describe('Timeline', () => {
     );
   });
 
+  test('renders a `mentioned` row with a link back to the source issue', () => {
+    const mentioned: IssueEvent = {
+      id: 3,
+      issueId: 1,
+      actorId: human.id,
+      type: 'mentioned',
+      data: { projectKey: 'DEMO', number: 7, title: 'Source ticket' },
+      createdAt: '2026-07-20T00:00:03.000Z',
+    };
+
+    render(
+      <Timeline
+        events={[mentioned]}
+        comments={[]}
+        actors={actors}
+        freshKeys={new Set()}
+        composer={null}
+      />,
+    );
+
+    const row = screen.getByRole('listitem');
+    expect(row.textContent).toContain('mentioned this from');
+    const link = within(row).getByRole('link', {
+      name: 'DEMO-7 Source ticket',
+    });
+    expect(link.getAttribute('href')).toBe('/projects/demo/issues/7');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener');
+  });
+
   test('flags a live-inserted row as fresh by its key', () => {
     render(
       <Timeline

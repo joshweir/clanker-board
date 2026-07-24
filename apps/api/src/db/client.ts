@@ -20,3 +20,14 @@ export function createDb(path: string) {
 }
 
 export type Db = ReturnType<typeof createDb>;
+
+// The transaction-scoped handle a db.transaction() callback runs on (#82/#76) -
+// inferred from Db['transaction'] itself so it can never drift from the real
+// drizzle type. Shared by withEvents (the transaction owner) and any query
+// helper (e.g. findIssue) a caller needs to run against the SAME transaction
+// rather than a fresh top-level connection.
+export type Tx = Parameters<Db['transaction']>[0] extends (
+  tx: infer T,
+) => unknown
+  ? T
+  : never;
